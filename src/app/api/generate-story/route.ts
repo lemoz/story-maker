@@ -4,10 +4,19 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from 'redis';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+// Import the Vercel Blob 'put' function
+import { put } from '@vercel/blob';
+
+// Character schema
+const characterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  isMain: z.boolean(),
+});
 
 // Input validation schema
 const storyInputSchema = z.object({
-  characterName: z.string().min(1, "Character name is required"),
+  characters: z.array(characterSchema).min(1, "At least one character is required"),
   ageRange: z.string({ required_error: "Age range is required" }),
   storyPlotOption: z.enum(["photos", "describe"]),
   storyDescription: z.string().min(5, "Story description must be at least 5 characters long"),
@@ -19,7 +28,7 @@ type StoryInput = z.infer<typeof storyInputSchema>;
 // Story page structure
 interface StoryPage {
   text: string;
-  imageUrl: string | null;
+  imageUrl: string | null; // This will now always be a URL or null
 }
 
 interface StoryData {
@@ -33,21 +42,69 @@ interface StoryData {
 // Declare redisClient at the outer scope
 let redisClient: any = undefined;
 
+// --- NEW: Helper function to upload Base64 image to Vercel Blob ---
+async function uploadImageToBlobStorage(base64Data: string, storyId: string, pageIndex: number): Promise<string | null> {
+  try {
+    // Check if BLOB_READ_WRITE_TOKEN is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        console.error('Missing BLOB_READ_WRITE_TOKEN environment variable.');
+        // Optionally, decide if you want to proceed without images or throw an error
+        return null; // Fail gracefully for this image
+    }
+
+    // Extract the actual base64 content (remove the data:image/...;base64, part)
+    const base64String = base64Data.split(',')[1];
+    if (!base64String) {
+      console.error('Invalid base64 data string received.');
+      return null;
+    }
+
+    // Convert base64 to Buffer
+    const buffer = Buffer.from(base64String, 'base64');
+
+    // Generate a unique filename
+    const filename = `stories/${storyId}/page-${pageIndex + 1}-${randomUUID()}.png`;
+
+    console.log(`Uploading image to Vercel Blob: ${filename}`);
+
+    // Upload to Vercel Blob
+    const blob = await put(filename, buffer, {
+      access: 'public', // Make the image publicly accessible
+      contentType: 'image/png', // Explicitly set content type
+      // Optionally add caching headers if needed
+      // cacheControlMaxAge: 31536000 // e.g., 1 year
+    });
+
+    console.log(`Image uploaded successfully: ${blob.url}`);
+    return blob.url; // Return the public URL
+
+  } catch (error) {
+    console.error(`Failed to upload image for page ${pageIndex + 1}:`, error);
+    return null; // Return null if upload fails
+  }
+}
+// --- End NEW Helper function ---
+
+
 export async function POST(request: Request) {
+  // Create unique ID early so it can be used in filenames
+  const storyId = randomUUID();
+  let redisClient: any = undefined; // Keep redisClient scoped within the request
+
   try {
     // Parse and validate request body
     const body = await request.json();
     const validationResult = storyInputSchema.safeParse(body);
-    
+
     if (!validationResult.success) {
       return NextResponse.json(
         { error: 'Invalid input', details: validationResult.error.format() },
         { status: 400 }
       );
     }
-    
+
     const storyInput = validationResult.data;
-    
+
     // Initialize OpenAI client
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -79,7 +136,6 @@ export async function POST(request: Request) {
           { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
           { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
           { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-          // Note: Exclude HARM_CATEGORY_CIVIC_INTEGRITY as it wasn't in the library's HarmCategory enum we imported previously, might not be standard
         ],
       });
       
@@ -102,41 +158,71 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Redis connection failed.' }, { status: 500 });
       }
       
-      // Generate story text using OpenAI
-      const storyPages = await generateStoryText(openai, storyInput);
-      
-      // Generate illustrations using Gemini
-      const imageResults = await generateIllustrations(
-        generativeModel,
-        storyPages,
-        storyInput
-      );
-      
-      // Combine text and images
-      const pagesData: StoryPage[] = storyPages.map((text, index) => ({
-        text,
-        imageUrl: imageResults[index],
-      }));
-      
-      // Create unique ID and title for the story
-      const storyId = randomUUID();
-      const title = generateStoryTitle(storyInput.characterName);
-      const subtitle = `A story for ${storyInput.ageRange} year olds`;
-      
-      // Assemble complete story data
-      const storyData: StoryData = {
-        id: storyId,
-        title,
-        subtitle,
-        createdAt: new Date().toISOString(),
-        pages: pagesData,
-      };
-      
-      // Store in Redis (with 24 hour expiration)
-      await redisClient.set(`story:${storyId}`, JSON.stringify(storyData), { EX: 86400 }); // Note: EX for seconds
-      
-      // Return success response with story ID
-      return NextResponse.json({ storyId }, { status: 200 });
+      // --- Generate Story ---
+      try {
+        // Generate story text
+        const storyPagesText = await generateStoryText(openai, storyInput);
+
+        // Generate illustrations (passing storyId now)
+        const imageUrls = await generateIllustrations(
+            generativeModel,
+            storyPagesText,
+            storyInput,
+            storyId // Pass storyId here
+        );
+
+        // Combine text and image URLs
+        const pagesData: StoryPage[] = storyPagesText.map((text, index) => ({
+            text,
+            imageUrl: imageUrls[index], // This is now a URL or null
+        }));
+
+        // Assemble story data
+        const title = generateStoryTitle(storyInput.characters);
+        const subtitle = `A story for ${storyInput.ageRange} year olds`;
+        const storyData: StoryData = {
+            id: storyId,
+            title,
+            subtitle,
+            createdAt: new Date().toISOString(),
+            pages: pagesData,
+        };
+
+        // Convert to JSON
+        const storyDataJSON = JSON.stringify(storyData);
+
+        // Log size (will be much smaller now)
+        const dataSizeInKB = Math.round(storyDataJSON.length / 1024);
+        console.log(`Story data size (excluding images): ${dataSizeInKB} KB`);
+
+        // Store in Redis
+        await redisClient.set(`story:${storyId}`, storyDataJSON, { EX: 86400 });
+
+        // Return success
+        return NextResponse.json({ storyId }, { status: 200 });
+
+      } catch (error: any) {
+        console.error('Error in story generation process:', error);
+        let errorMessage = 'An unexpected error occurred during story generation';
+        let status = 500;
+
+        if (error.message && error.message.includes('OOM command not allowed')) {
+          errorMessage = 'Memory limit exceeded when storing the story. This might be due to large image sizes.';
+          console.error('Redis OOM error: Memory limit exceeded');
+        } else if (error.message && error.message.includes('Failed to generate story text')) {
+          errorMessage = 'Failed to generate the story text. Please try again or modify your description.';
+        } else if (error.message && error.message.includes('Redis connection failed')) {
+          errorMessage = 'Database connection error. Please try again later.';
+        } else if (error.message?.includes('Failed to upload image')) {
+          errorMessage = 'Part of the story generation failed (image upload). The story might be incomplete.';
+        }
+        
+        return NextResponse.json(
+          { error: errorMessage },
+          { status }
+        );
+      }
+      // --- End Generate Story ---
       
     } catch (error) {
       console.error('Error initializing Google Generative AI:', error);
@@ -146,9 +232,13 @@ export async function POST(request: Request) {
       );
     } finally {
       // Close Redis connection if it's open
-      if (redisClient && redisClient.isOpen) {
-        await redisClient.disconnect();
-        console.log("node-redis client disconnected.");
+      try {
+        if (redisClient && redisClient.isOpen) {
+          await redisClient.disconnect();
+          console.log("node-redis client disconnected.");
+        }
+      } catch (err) {
+        console.error("Error disconnecting from Redis:", err);
       }
     }
     
@@ -163,10 +253,21 @@ export async function POST(request: Request) {
 
 async function generateStoryText(openai: OpenAI, storyInput: StoryInput): Promise<string[]> {
   try {
-    const { characterName, ageRange, storyDescription, storyStyle } = storyInput;
+    const { characters, ageRange, storyDescription, storyStyle } = storyInput;
+    
+    // Find the main character, or use the first character if none is marked as main
+    const mainCharacter = characters.find(char => char.isMain) || characters[0];
+    
+    // Get all character names for the story
+    const characterNames = characters.map(c => c.name).filter(name => name.trim() !== '');
+    const mainCharacterName = mainCharacter.name || 'the main character';
+    
+    const characterPrompt = characterNames.length > 1 
+      ? `The main character is named ${mainCharacterName}. Other characters in the story are: ${characterNames.filter(n => n !== mainCharacterName).join(', ')}.`
+      : `The story should be about a character named ${mainCharacterName}.`;
     
     const systemPrompt = `You are a creative children's story writer. Create a 5-paragraph story for a ${ageRange} year old child. 
-The story should be about a character named ${characterName}. 
+${characterPrompt}
 ${storyStyle ? `The story should have a ${storyStyle} style and tone.` : ''}
 The story should be engaging, age-appropriate, and have a clear beginning, middle, and end.
 Return ONLY a JSON object with a "storyPages" array containing exactly 5 strings, each representing one paragraph of the story.
@@ -204,25 +305,41 @@ Do not include any explanations, notes, or other text outside the JSON structure
   }
 }
 
+// --- MODIFIED: generateIllustrations function ---
 async function generateIllustrations(
-  generativeModel: any, 
-  storyPages: string[], 
-  storyInput: StoryInput
+  generativeModel: any,
+  storyPages: string[],
+  storyInput: StoryInput,
+  storyId: string // Added storyId parameter
 ): Promise<(string | null)[]> {
   // Initialize array with nulls for all pages
   const imageResults: (string | null)[] = Array(storyPages.length).fill(null);
   
   // Generate illustrations for all pages
-  const indicesToIllustrate = Array.from({ length: storyPages.length }, (_, i) => i); // Illustrate all pages
+  const indicesToIllustrate = Array.from({ length: storyPages.length }, (_, i) => i); 
   
   for (const index of indicesToIllustrate) {
     try {
       const pageText = storyPages[index];
-      const { characterName, storyStyle } = storyInput;
+      const { characters, storyStyle } = storyInput;
+      
+      // Find the main character, or use the first character if none is marked as main
+      const mainCharacter = characters.find(char => char.isMain) || characters[0];
+      const mainCharacterName = mainCharacter.name || 'the main character';
+      
+      // Get all character names for the illustration
+      const otherCharacterNames = characters
+        .filter(c => !c.isMain && c.name.trim() !== '')
+        .map(c => c.name);
+      
+      // Create character description for prompt
+      const characterDescription = otherCharacterNames.length > 0
+        ? `The main character's name is ${mainCharacterName}. Other characters that may appear: ${otherCharacterNames.join(', ')}.`
+        : `The main character's name is ${mainCharacterName}.`;
       
       // Create prompt for image generation
       const promptText = `Create a children's book illustration showing: ${pageText}
-The main character's name is ${characterName}.
+${characterDescription}
 ${storyStyle ? `The illustration style should be ${storyStyle}.` : ''}
 Style: Colorful, whimsical, high-quality children's book illustration, digital art, appealing to children. No text or words in the image.`;
 
@@ -232,33 +349,42 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
       const result = await generativeModel.generateContent({
         contents: [{ role: "user", parts: [{ text: promptText }] }],
         generationConfig: {
-          // Remove responseMimeType as JSON mode is not supported for this model
-          responseModalities: ["Text", "Image"], // Request BOTH Text and Image
-          // candidateCount: 1 // Usually defaults to 1
+          responseModalities: ["Text", "Image"],
         },
       });
       
-      const response = await result.response; // Get the response object
+      const response = await result.response;
       
       console.log(`Got response from Gemini for page ${index + 1}`);
       
-      // Extract image data with improved parsing
+      // Extract image data
       const imageCandidate = response.candidates?.[0];
+      let base64ImageData: string | null = null;
 
-      if (imageCandidate && imageCandidate.content && imageCandidate.content.parts) {
-        // Find the first part with image data
+      if (imageCandidate?.content?.parts) {
         const imagePart = imageCandidate.content.parts.find(part => part.inlineData?.data);
-        if (imagePart && imagePart.inlineData?.data) {
-          const mimeType = imagePart.inlineData.mimeType || 'image/png'; // Use provided mime type
-          const dataUri = `data:${mimeType};base64,${imagePart.inlineData.data}`;
-          imageResults[index] = dataUri;
-          console.log(`Successfully generated image for page ${index + 1} via Gemini`);
+        if (imagePart?.inlineData?.data) {
+          const mimeType = imagePart.inlineData.mimeType || 'image/png';
+          base64ImageData = `data:${mimeType};base64,${imagePart.inlineData.data}`;
+          console.log(`Successfully extracted base64 image data for page ${index + 1}`);
         } else {
-          console.warn(`No image part found in Gemini response for page ${index + 1}`, JSON.stringify(response, null, 2)); // Log full response if no image
+          console.warn(`No image part found in Gemini response for page ${index + 1}`);
         }
       } else {
-        console.warn(`No valid candidates or parts found in Gemini response for page ${index + 1}`, JSON.stringify(response, null, 2)); // Log full response
+        console.warn(`No valid candidates or parts found in Gemini response for page ${index + 1}`);
       }
+
+      // Upload the image if we got data
+      if (base64ImageData) {
+        const imageUrl = await uploadImageToBlobStorage(base64ImageData, storyId, index);
+        if (imageUrl) {
+          imageResults[index] = imageUrl; // Store the URL
+          console.log(`Successfully uploaded image and stored URL for page ${index + 1}`);
+        } else {
+          console.error(`Failed to upload image for page ${index + 1}. URL will be null.`);
+        }
+      }
+      
     } catch (error) {
       console.error(`Error generating illustration for page ${index}:`, error);
       // Continue with other illustrations rather than failing completely
@@ -268,7 +394,7 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
   return imageResults;
 }
 
-function generateStoryTitle(characterName: string): string {
+function generateStoryTitle(characters: { id: string; name: string; isMain: boolean }[]): string {
   const titlePrefixes = [
     "The Adventure of",
     "The Magical Journey of",
@@ -277,6 +403,10 @@ function generateStoryTitle(characterName: string): string {
     "The Amazing Day with"
   ];
   
+  // Find the main character, or use the first character if none is marked as main
+  const mainCharacter = characters.find(char => char.isMain) || characters[0];
+  const mainCharacterName = mainCharacter.name || 'the Hero';
+  
   const randomPrefix = titlePrefixes[Math.floor(Math.random() * titlePrefixes.length)];
-  return `${randomPrefix} ${characterName}`;
+  return `${randomPrefix} ${mainCharacterName}`;
 }

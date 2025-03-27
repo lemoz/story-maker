@@ -29,7 +29,16 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+
+// Character interface
+interface Character {
+  id: string;
+  name: string;
+  isMain: boolean;
+  // photoFile?: File;
+  // photoPreviewUrl?: string;
+}
 
 export default function CreateStoryPage() {
   const router = useRouter();
@@ -38,12 +47,32 @@ export default function CreateStoryPage() {
   const [storyPlotOption, setStoryPlotOption] = useState<string>('describe');
   const [ageRange, setAgeRange] = useState<string>('');
   const [storyStyle, setStoryStyle] = useState<string>('');
-  const [characterName, setCharacterName] = useState<string>('');
+  const [characters, setCharacters] = useState<Character[]>([{ id: crypto.randomUUID(), name: '', isMain: true }]);
   const [storyDescription, setStoryDescription] = useState<string>('');
   
   // State hooks for form submission
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Handler functions for characters
+  const handleAddCharacter = () => {
+    const newCharacter: Character = {
+      id: crypto.randomUUID(),
+      name: '',
+      isMain: false
+    };
+    setCharacters(prev => [...prev, newCharacter]);
+  };
+
+  const handleRemoveCharacter = (id: string) => {
+    setCharacters(prev => prev.filter(char => char.id !== id));
+  };
+
+  const handleCharacterChange = (id: string, field: keyof Character, value: any) => {
+    setCharacters(prev => prev.map(char =>
+      char.id === id ? { ...char, [field]: value } : char
+    ));
+  };
 
   // Form submission handler
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -61,7 +90,7 @@ export default function CreateStoryPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          characterName,
+          characters, // Sending the characters array instead of characterName
           storyPlotOption,
           storyDescription,
           ageRange,
@@ -115,28 +144,43 @@ export default function CreateStoryPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-start gap-4">
-              <div className="h-20 w-20 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground shrink-0">
-                Upload Photo
-              </div>
-              <div className="flex-1 space-y-2">
-                <Input 
-                  type="text" 
-                  placeholder="Character's Name" 
-                  value={characterName}
-                  onChange={(e) => setCharacterName(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm">
-                    Make Main Character
-                  </Button>
-                  <Button type="button" variant="outline" size="sm">
-                    Remove
-                  </Button>
+            {characters.map((character) => (
+              <div key={character.id} className="flex items-start gap-4 mb-4 p-4 border rounded">
+                {/* Placeholder for Photo Upload */}
+                <div className="h-20 w-20 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground shrink-0">
+                  Upload Photo
                 </div>
+                <div className="flex-grow space-y-2">
+                  <Label htmlFor={`char-name-${character.id}`}>Character Name</Label>
+                  <Input
+                    id={`char-name-${character.id}`}
+                    placeholder="Enter name"
+                    value={character.name}
+                    onChange={(e) => handleCharacterChange(character.id, 'name', e.target.value)}
+                  />
+                  <div className="flex items-center space-x-2">
+                    {/* Placeholder for 'Make Main Character' Button - Add later */}
+                    <span className="text-xs text-muted-foreground">{character.isMain ? '(Main Character)' : ''}</span>
+                  </div>
+                </div>
+                {/* Remove button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => handleRemoveCharacter(character.id)}
+                  aria-label="Remove Character"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-            <Button type="button" variant="outline" className="w-full">
+            ))}
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full"
+              onClick={handleAddCharacter}
+            >
               + Add Another Character
             </Button>
           </CardContent>
