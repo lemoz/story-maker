@@ -12,6 +12,7 @@ const characterSchema = z.object({
   id: z.string(),
   name: z.string(),
   isMain: z.boolean(),
+  uploadedPhotoUrl: z.string().url().optional().nullable(),
 });
 
 // Input validation schema
@@ -305,6 +306,39 @@ Do not include any explanations, notes, or other text outside the JSON structure
   }
 }
 
+// Helper function to fetch a character photo and convert to base64
+async function fetchCharacterPhoto(photoUrl: string): Promise<{ data: string, mimeType: string } | null> {
+  try {
+    console.log(`Fetching character photo from: ${photoUrl}`);
+    
+    // Fetch the image
+    const response = await fetch(photoUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    // Get image data as ArrayBuffer
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Convert to base64
+    const base64String = Buffer.from(arrayBuffer).toString('base64');
+    
+    // Determine MIME type from Content-Type header or fallback to a default
+    const contentType = response.headers.get('Content-Type') || 'image/jpeg';
+    
+    console.log(`Successfully fetched and processed character photo, MIME type: ${contentType}`);
+    
+    return {
+      data: base64String,
+      mimeType: contentType
+    };
+  } catch (error) {
+    console.error('Error fetching character photo:', error);
+    return null;
+  }
+}
+
 // --- MODIFIED: generateIllustrations function ---
 async function generateIllustrations(
   generativeModel: any,
@@ -345,9 +379,33 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
 
       console.log(`Generating image for page ${index + 1} using Gemini...`);
       
+      // Prepare the content parts for Gemini
+      const contentParts: any[] = [{ text: promptText }];
+      
+      // Check if main character has an uploaded photo
+      let characterPhotoData = null;
+      if (mainCharacter.uploadedPhotoUrl) {
+        characterPhotoData = await fetchCharacterPhoto(mainCharacter.uploadedPhotoUrl);
+        
+        if (characterPhotoData) {
+          console.log(`Adding character photo to Gemini request for page ${index + 1}`);
+          
+          // Add additional text to prompt about using the character photo
+          contentParts[0].text += `\nUse the provided image as a reference for the main character's appearance.`;
+          
+          // Add the image part
+          contentParts.push({
+            inlineData: {
+              data: characterPhotoData.data,
+              mimeType: characterPhotoData.mimeType
+            }
+          });
+        }
+      }
+      
       // Call generateContent with the @google/generative-ai structure
       const result = await generativeModel.generateContent({
-        contents: [{ role: "user", parts: [{ text: promptText }] }],
+        contents: [{ role: "user", parts: contentParts }],
         generationConfig: {
           responseModalities: ["Text", "Image"],
         },
