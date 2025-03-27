@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -31,6 +32,8 @@ import {
 import { Loader2 } from "lucide-react";
 
 export default function CreateStoryPage() {
+  const router = useRouter();
+  
   // State hooks for form values
   const [storyPlotOption, setStoryPlotOption] = useState<string>('describe');
   const [ageRange, setAgeRange] = useState<string>('');
@@ -53,40 +56,32 @@ export default function CreateStoryPage() {
     setIsLoading(true);
     
     try {
-      // Log current form state
-      console.log('Submitting:', { 
-        characterName, 
-        storyPlotOption, 
-        storyDescription, 
-        ageRange, 
-        storyStyle 
+      // Make API call to generate story
+      const response = await fetch('/api/generate-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterName,
+          storyPlotOption,
+          storyDescription,
+          ageRange,
+          storyStyle
+        })
       });
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Handle response
+      if (!response.ok) {
+        // Try to parse error message from response
+        const errorData = await response.json().catch(() => null);
+        setError(errorData?.error || `Request failed with status ${response.status}`);
+        return;
+      }
       
-      // Simulate successful response
-      console.log('Success! Story ID would be received here.');
+      // Parse success response
+      const data = await response.json();
       
-      // Here we would add the actual API call to create the story
-      // const response = await fetch('/api/stories', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     characterName,
-      //     storyPlotOption,
-      //     storyDescription,
-      //     ageRange,
-      //     storyStyle
-      //   })
-      // });
-      
-      // if (!response.ok) {
-      //   throw new Error('Failed to create story');
-      // }
-      
-      // const data = await response.json();
-      // Router.push(`/stories/${data.id}`);
+      // Redirect to story viewer page
+      router.push(`/story/${data.storyId}`);
       
     } catch (err) {
       console.error('Submission failed:', err);
