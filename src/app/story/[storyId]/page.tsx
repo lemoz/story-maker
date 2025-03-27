@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,14 +23,16 @@ interface StoryData {
   pages: StoryPage[];
 }
 
-export default function StoryViewerPage({ params }: { params: { storyId: string } }) {
-  const { storyId } = params;
+export default function StoryViewerPage() {
+  const params = useParams();
+  const storyId = params.storyId as string;
   
   // State hooks
   const [storyData, setStoryData] = useState<StoryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
 
   // Fetch story data
   useEffect(() => {
@@ -68,6 +71,18 @@ export default function StoryViewerPage({ params }: { params: { storyId: string 
   const goToNextPage = () => {
     if (storyData && currentPageIndex < storyData.pages.length - 1) {
       setCurrentPageIndex(currentPageIndex + 1);
+    }
+  };
+
+  // Share story handler
+  const handleShare = async () => {
+    try {
+      const currentUrl = window.location.href;
+      await navigator.clipboard.writeText(currentUrl);
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus('idle'), 2500);
+    } catch (err) {
+      console.error('Failed to copy URL to clipboard:', err);
     }
   };
 
@@ -150,8 +165,16 @@ export default function StoryViewerPage({ params }: { params: { storyId: string 
           <Button variant="outline" className="gap-2">
             <Download className="h-4 w-4" /> Download PDF
           </Button>
-          <Button variant="outline" className="gap-2">
-            <Share2 className="h-4 w-4" /> Share Story
+          <Button variant="outline" className="gap-2" onClick={handleShare}>
+            {shareStatus === 'copied' ? (
+              <>
+                <Check className="h-4 w-4" /> Copied!
+              </>
+            ) : (
+              <>
+                <Share2 className="h-4 w-4" /> Share Story
+              </>
+            )}
           </Button>
         </div>
         
