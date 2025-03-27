@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { VertexAI } from '@google-cloud/vertexai';
-import { kv } from '@vercel/kv';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createClient } from 'redis';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 
@@ -30,6 +30,9 @@ interface StoryData {
   pages: StoryPage[];
 }
 
+// Declare redisClient at the outer scope
+let redisClient: any = undefined;
+
 export async function POST(request: Request) {
   try {
     // Parse and validate request body
@@ -57,40 +60,52 @@ export async function POST(request: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
     
-    // Initialize Google Vertex AI client
-    if (!process.env.GOOGLE_CREDENTIALS_BASE64) {
-      return NextResponse.json(
-        { error: 'Google Cloud credentials are not configured' },
-        { status: 500 }
-      );
+    // Initialize Google Generative AI client
+    if (!process.env.GOOGLE_API_KEY) {
+      console.error('Missing GOOGLE_API_KEY environment variable.');
+      return NextResponse.json({ error: 'Google AI configuration failed: Missing API Key.' }, { status: 500 });
     }
     
     try {
-      // Decode and parse the base64 encoded Google credentials
-      const decodedCredentials = Buffer.from(
-        process.env.GOOGLE_CREDENTIALS_BASE64,
-        'base64'
-      ).toString();
+      // Initialize the Google AI client with the API key
+      const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
       
-      const credentials = JSON.parse(decodedCredentials);
-      const projectId = credentials.project_id;
-      
-      const vertexAI = new VertexAI({
-        project: projectId,
-        location: 'us-central1',
-        googleAuthOptions: {
-          credentials,
-        },
+      // Get the specific Gemini model for image generation
+      const generativeModel = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash-exp-image-generation",
+        // Define safety settings using string literals
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+          // Note: Exclude HARM_CATEGORY_CIVIC_INTEGRITY as it wasn't in the library's HarmCategory enum we imported previously, might not be standard
+        ],
       });
       
-      const generativeModel = vertexAI.preview.getGenerativeModel({
-        model: 'imagegeneration@006',
-      });
+      // Create Redis client using REDIS_URL
+      if (!process.env.REDIS_URL) {
+        console.error('Missing REDIS_URL environment variable for Redis connection.');
+        return NextResponse.json({ error: 'Redis connection failed: Missing configuration.' }, { status: 500 });
+      }
+
+      // redisClient is now declared at the outer scope
+      try {
+          console.log("--- Attempting node-redis Connection ---");
+          console.log("Using REDIS_URL:", process.env.REDIS_URL);
+          redisClient = createClient({ url: process.env.REDIS_URL });
+          redisClient.on('error', (err) => console.error('Redis Client Error', err)); // Add error listener
+          await redisClient.connect(); // Connect explicitly
+          console.log("node-redis client connected.");
+      } catch (connectError) {
+          console.error("Failed to connect redis client:", connectError);
+          return NextResponse.json({ error: 'Redis connection failed.' }, { status: 500 });
+      }
       
       // Generate story text using OpenAI
       const storyPages = await generateStoryText(openai, storyInput);
       
-      // Generate illustrations using Vertex AI
+      // Generate illustrations using Gemini
       const imageResults = await generateIllustrations(
         generativeModel,
         storyPages,
@@ -117,18 +132,24 @@ export async function POST(request: Request) {
         pages: pagesData,
       };
       
-      // Store in Vercel KV (with 24 hour expiration)
-      await kv.set(`story:${storyId}`, storyData, { ex: 86400 });
+      // Store in Redis (with 24 hour expiration)
+      await redisClient.set(`story:${storyId}`, JSON.stringify(storyData), { EX: 86400 }); // Note: EX for seconds
       
       // Return success response with story ID
       return NextResponse.json({ storyId }, { status: 200 });
       
     } catch (error) {
-      console.error('Error initializing Google Cloud:', error);
+      console.error('Error initializing Google Generative AI:', error);
       return NextResponse.json(
-        { error: 'Failed to initialize Google Cloud services' },
+        { error: 'Failed to initialize Google Generative AI services' },
         { status: 500 }
       );
+    } finally {
+      // Close Redis connection if it's open
+      if (redisClient && redisClient.isOpen) {
+        await redisClient.disconnect();
+        console.log("node-redis client disconnected.");
+      }
     }
     
   } catch (error) {
@@ -191,8 +212,8 @@ async function generateIllustrations(
   // Initialize array with nulls for all pages
   const imageResults: (string | null)[] = Array(storyPages.length).fill(null);
   
-  // Indices to illustrate (first, middle, and last pages)
-  const indicesToIllustrate = [0, 2, 4];
+  // Generate illustrations for all pages
+  const indicesToIllustrate = Array.from({ length: storyPages.length }, (_, i) => i); // Illustrate all pages
   
   for (const index of indicesToIllustrate) {
     try {
@@ -203,30 +224,40 @@ async function generateIllustrations(
       const promptText = `Create a children's book illustration showing: ${pageText}
 The main character's name is ${characterName}.
 ${storyStyle ? `The illustration style should be ${storyStyle}.` : ''}
-Style: Colorful, whimsical, high-quality children's book illustration, digital art, appealing to children`;
+Style: Colorful, whimsical, high-quality children's book illustration, digital art, appealing to children. No text or words in the image.`;
 
-      const negativePrompt = "scary, violent, disturbing, adult content, text, words, letters, ugly, deformed, disfigured, low quality";
+      console.log(`Generating image for page ${index + 1} using Gemini...`);
       
-      // Create the request object
-      const request = {
-        prompt: promptText,
-        negativePrompt: negativePrompt,
-        sampleCount: 1
-      };
+      // Call generateContent with the @google/generative-ai structure
+      const result = await generativeModel.generateContent({
+        contents: [{ role: "user", parts: [{ text: promptText }] }],
+        generationConfig: {
+          // Remove responseMimeType as JSON mode is not supported for this model
+          responseModalities: ["Text", "Image"], // Request BOTH Text and Image
+          // candidateCount: 1 // Usually defaults to 1
+        },
+      });
       
-      // Call Imagen
-      const resp = await generativeModel.generateContent(request);
+      const response = await result.response; // Get the response object
       
-      // Await the response
-      const response = await resp.response;
+      console.log(`Got response from Gemini for page ${index + 1}`);
       
-      // Extract image data
-      if (response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-        // Format as a data URI
-        const dataUri = `data:image/png;base64,${response.candidates[0].content.parts[0].inlineData.data}`;
-        imageResults[index] = dataUri;
+      // Extract image data with improved parsing
+      const imageCandidate = response.candidates?.[0];
+
+      if (imageCandidate && imageCandidate.content && imageCandidate.content.parts) {
+        // Find the first part with image data
+        const imagePart = imageCandidate.content.parts.find(part => part.inlineData?.data);
+        if (imagePart && imagePart.inlineData?.data) {
+          const mimeType = imagePart.inlineData.mimeType || 'image/png'; // Use provided mime type
+          const dataUri = `data:${mimeType};base64,${imagePart.inlineData.data}`;
+          imageResults[index] = dataUri;
+          console.log(`Successfully generated image for page ${index + 1} via Gemini`);
+        } else {
+          console.warn(`No image part found in Gemini response for page ${index + 1}`, JSON.stringify(response, null, 2)); // Log full response if no image
+        }
       } else {
-        console.warn(`Image data not found in the expected structure for page ${index}`);
+        console.warn(`No valid candidates or parts found in Gemini response for page ${index + 1}`, JSON.stringify(response, null, 2)); // Log full response
       }
     } catch (error) {
       console.error(`Error generating illustration for page ${index}:`, error);
