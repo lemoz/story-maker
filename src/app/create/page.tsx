@@ -20,6 +20,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import {
   RadioGroup,
@@ -41,6 +42,7 @@ interface Character {
   id: string;
   name: string;
   isMain: boolean;
+  gender: 'female' | 'male' | 'unspecified';
   photoFile: File | null;
   photoPreviewUrl: string | null;
   uploadedPhotoUrl: string | null;
@@ -54,13 +56,15 @@ export default function CreateStoryPage() {
   const eventPhotosInputRef = React.useRef<HTMLInputElement | null>(null);
   
   // State hooks for form values
-  const [storyPlotOption, setStoryPlotOption] = useState<string>('describe');
+  const [storyPlotOption, setStoryPlotOption] = useState<string>('photos');
   const [ageRange, setAgeRange] = useState<string>('');
   const [storyStyle, setStoryStyle] = useState<string>('');
+  const [storyLengthTargetPages, setStoryLengthTargetPages] = useState<number>(6); // Default ~6 pages
   const [characters, setCharacters] = useState<Character[]>([{ 
     id: crypto.randomUUID(), 
     name: '', 
     isMain: true,
+    gender: 'unspecified',
     photoFile: null,
     photoPreviewUrl: null,
     uploadedPhotoUrl: null
@@ -151,6 +155,7 @@ export default function CreateStoryPage() {
       id: crypto.randomUUID(),
       name: '',
       isMain: false,
+      gender: 'unspecified',
       photoFile: null,
       photoPreviewUrl: null,
       uploadedPhotoUrl: null
@@ -306,10 +311,13 @@ export default function CreateStoryPage() {
         photoUrls.push(data.url);
       }
       
-      // Get character names for context
-      const characterNames = characters
-        .map(char => char.name)
-        .filter(name => name.trim() !== '');
+      // Map characters with name and gender for context
+      const charactersInfo = characters
+        .filter(char => char.name.trim() !== '')
+        .map(char => ({
+          name: char.name,
+          gender: char.gender
+        }));
       
       // Call the suggest-story-idea API with the uploaded photo URLs
       const suggestionResponse = await fetch('/api/suggest-story-idea', {
@@ -319,7 +327,7 @@ export default function CreateStoryPage() {
         },
         body: JSON.stringify({
           photoUrls,
-          characterNames,
+          characters: charactersInfo,
           ageRange: ageRange || '5-7'
         })
       });
@@ -459,10 +467,11 @@ export default function CreateStoryPage() {
       }
       
       // Prepare characters data for API (excluding client-only properties)
-      const charactersForAPI = updatedCharacters.map(({ id, name, isMain, uploadedPhotoUrl }) => ({
+      const charactersForAPI = updatedCharacters.map(({ id, name, isMain, gender, uploadedPhotoUrl }) => ({
         id,
         name,
         isMain,
+        gender,
         uploadedPhotoUrl
       }));
       
@@ -474,6 +483,7 @@ export default function CreateStoryPage() {
         storyDescription,
         ageRange,
         storyStyle,
+        storyLengthTargetPages, // Number of pages for the story
         email: userEmail // Include email if provided
       };
       
@@ -568,13 +578,26 @@ export default function CreateStoryPage() {
                   detail: eventData.message
                 });
               } else if (eventData.step === 'illustrating') {
-                setGenerationStatus({
-                  step: 'illustrating',
-                  illustrationProgress: eventData.illustrationProgress || {
+                // Preserve any existing previewUrl when updating illustration progress
+                setGenerationStatus(prev => {
+                  const newProgress = eventData.illustrationProgress || {
                     current: 0,
                     total: 5,
                     detail: eventData.message
+                  };
+                  
+                  // Preserve the existing previewUrl if it exists and isn't in the new data
+                  if (prev.step === 'illustrating' && 
+                      prev.illustrationProgress?.previewUrl && 
+                      !newProgress.previewUrl) {
+                    console.log("Preserving existing previewUrl during progress update");
+                    newProgress.previewUrl = prev.illustrationProgress.previewUrl;
                   }
+                  
+                  return {
+                    step: 'illustrating',
+                    illustrationProgress: newProgress
+                  };
                 });
               } else if (eventData.step === 'saving') {
                 setGenerationStatus({
@@ -585,20 +608,33 @@ export default function CreateStoryPage() {
               break;
               
             case 'image_preview':
-              // Update the UI with the preview image
-              setGenerationStatus(prev => {
-                if (prev.step !== 'illustrating' || !prev.illustrationProgress) {
-                  return prev;
-                }
-                
-                return {
-                  ...prev,
-                  illustrationProgress: {
-                    ...prev.illustrationProgress,
-                    previewUrl: eventData.previewUrl
+              console.log("SSE Handler: Received image_preview event data:", eventData); // Debug log
+              if (eventData?.previewUrl) { // Check if previewUrl exists in data
+                setGenerationStatus(prev => {
+                  // Only update if currently illustrating and progress data exists
+                  if (prev.step !== 'illustrating' || !prev.illustrationProgress) {
+                    console.warn("Received image_preview event but not in illustrating step or no progress data.");
+                    return prev;
                   }
-                };
-              });
+
+                  // Merge the new previewUrl correctly
+                  const updatedProgress = {
+                    ...prev.illustrationProgress,
+                    previewUrl: eventData.previewUrl // Update the preview URL
+                    // Optionally update current count if needed:
+                    // current: eventData.pageIndex + 1 // If pageIndex is reliable
+                  };
+
+                  console.log("SSE Handler: Updating generationStatus with preview:", updatedProgress); // Log the update
+
+                  return {
+                    ...prev,
+                    illustrationProgress: updatedProgress
+                  };
+                });
+              } else {
+                console.warn("Received image_preview event but previewUrl was missing:", eventData);
+              }
               break;
               
             case 'complete':
@@ -812,6 +848,34 @@ export default function CreateStoryPage() {
                     onChange={(e) => handleCharacterChange(character.id, 'name', e.target.value)}
                     className="border-primary/20 focus:border-primary/60"
                   />
+                  
+                  <div className="mt-3">
+                    <Label className="text-sm font-medium mb-2 block">
+                      Gender
+                    </Label>
+                    <RadioGroup 
+                      value={character.gender}
+                      onValueChange={(value) => handleCharacterChange(character.id, 'gender', value)}
+                      className="flex flex-wrap gap-4 mt-1"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="female" id={`gender-female-${character.id}`} />
+                        <Label htmlFor={`gender-female-${character.id}`} className="cursor-pointer">Female</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="male" id={`gender-male-${character.id}`} />
+                        <Label htmlFor={`gender-male-${character.id}`} className="cursor-pointer">Male</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="unspecified" id={`gender-unspecified-${character.id}`} />
+                        <Label htmlFor={`gender-unspecified-${character.id}`} className="cursor-pointer">Unspecified</Label>
+                      </div>
+                    </RadioGroup>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Character gender helps the AI create more accurate illustrations and stories
+                    </p>
+                  </div>
+                  
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     {/* Main character indicator */}
                     {character.isMain && (
@@ -1113,6 +1177,24 @@ export default function CreateStoryPage() {
                   Sets the overall tone and mood of your story
                 </p>
               </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between items-center mb-1">
+                <Label htmlFor="story-length-slider" className="text-sm font-medium">Approximate Story Length</Label>
+                {/* Display current value */}
+                <span className="text-sm font-medium text-primary w-14 text-right tabular-nums">{storyLengthTargetPages} pages</span>
+              </div>
+              <Slider
+                id="story-length-slider"
+                min={3} // Min pages
+                max={10} // Max pages
+                step={1}
+                value={[storyLengthTargetPages]} // Slider value is an array
+                onValueChange={(newValueArray) => setStoryLengthTargetPages(newValueArray[0])} // Update state with the first value
+                className="py-2" // Add vertical padding for better thumb interaction
+              />
+              <p className="text-xs text-muted-foreground pt-1">Adjust the slider to set the desired story length (3-10 pages).</p>
             </div>
           </CardContent>
         </Card>

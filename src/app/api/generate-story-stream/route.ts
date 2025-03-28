@@ -11,6 +11,7 @@ const characterSchema = z.object({
   id: z.string(),
   name: z.string(),
   isMain: z.boolean(),
+  gender: z.enum(['female', 'male', 'unspecified']).default('unspecified'),
   uploadedPhotoUrl: z.string().url().optional().nullable(),
 });
 
@@ -21,6 +22,7 @@ const storyInputSchema = z.object({
   storyPlotOption: z.enum(["photos", "describe"]),
   storyDescription: z.string().min(1, "Story description is required when using describe mode").optional(),
   storyStyle: z.string().optional().nullable(),
+  storyLengthTargetPages: z.number().int().min(3).max(10).optional().default(6),
   email: z.string().email().optional().nullable(),
   uploadedStoryPhotoUrls: z.array(z.string().url()).optional(), // URLs of uploaded story photos
 });
@@ -299,7 +301,30 @@ export async function POST(request: NextRequest) {
             }));
 
             // 4. Assemble story data
-            const title = generateStoryTitle(storyInput.characters);
+            sendEvent(controller, 'progress', { 
+              step: 'saving', 
+              status: 'in_progress', 
+              message: 'Creating the perfect title for your story...' 
+            });
+            
+            // Get the main character's name
+            const mainCharacter = storyInput.characters.find(char => char.isMain) || storyInput.characters[0];
+            const mainCharacterName = mainCharacter.name || 'the Hero';
+            
+            // Generate an AI-powered title based on the story content
+            let title;
+            try {
+              title = await generateTitleFromStory(
+                openai, 
+                storyPagesText, 
+                storyInput.ageRange, 
+                mainCharacterName
+              );
+            } catch (titleError) {
+              console.error("Failed to generate AI title, using fallback:", titleError);
+              title = fallbackGenerateStoryTitle(mainCharacterName);
+            }
+            
             const subtitle = `A story for ${storyInput.ageRange} year olds`;
             const storyData: StoryData = {
               id: storyId,
@@ -411,7 +436,7 @@ async function generateStoryText(openai: OpenAI, storyInput: StoryInput): Promis
   try {
     console.log("Starting generateStoryText with OpenAI...");
     
-    const { characters, ageRange, storyDescription, storyStyle } = storyInput;
+    const { characters, ageRange, storyDescription, storyStyle, storyLengthTargetPages = 6 } = storyInput;
     
     // Find the main character, or use the first character if none is marked as main
     const mainCharacter = characters.find(char => char.isMain) || characters[0];
@@ -420,15 +445,38 @@ async function generateStoryText(openai: OpenAI, storyInput: StoryInput): Promis
     const characterNames = characters.map(c => c.name).filter(name => name.trim() !== '');
     const mainCharacterName = mainCharacter.name || 'the main character';
     
-    const characterPrompt = characterNames.length > 1 
-      ? `The main character is named ${mainCharacterName}. Other characters in the story are: ${characterNames.filter(n => n !== mainCharacterName).join(', ')}.`
-      : `The story should be about a character named ${mainCharacterName}.`;
+    // Create character details with gender information
+    const mainCharacterGender = mainCharacter.gender || 'unspecified';
+    const mainCharacterGenderText = mainCharacterGender !== 'unspecified' ? 
+      `The main character ${mainCharacterName} is ${mainCharacterGender}.` : '';
+      
+    // Build other characters details
+    const otherCharactersDetails = characters
+      .filter(c => !c.isMain && c.name.trim() !== '')
+      .map(c => {
+        const genderText = c.gender !== 'unspecified' ? ` (${c.gender})` : '';
+        return `${c.name}${genderText}`;
+      });
     
-    const systemPrompt = `You are a creative children's story writer. Create a 5-paragraph story for a ${ageRange} year old child. 
+    // Create length guidance based on requested page count
+    let lengthGuidance = `a story of about ${storyLengthTargetPages} paragraphs`;
+    if (storyLengthTargetPages <= 4) {
+      lengthGuidance += " (a short story)";
+    } else if (storyLengthTargetPages >= 8) {
+      lengthGuidance += " (a longer story)";
+    } else {
+      lengthGuidance += " (a medium-length story)";
+    }
+    
+    const characterPrompt = characterNames.length > 1 
+      ? `The main character is named ${mainCharacterName}. ${mainCharacterGenderText} Other characters in the story are: ${otherCharactersDetails.join(', ')}.`
+      : `The story should be about a character named ${mainCharacterName}. ${mainCharacterGenderText}`;
+    
+    const systemPrompt = `You are a creative children's story writer. Create ${lengthGuidance} for a ${ageRange} year old child. 
 ${characterPrompt}
 ${storyStyle ? `The story should have a ${storyStyle} style and tone.` : ''}
-The story should be engaging, age-appropriate, and have a clear beginning, middle, and end.
-Return ONLY a JSON object with a "storyPages" array containing exactly 5 strings, each representing one paragraph of the story.
+The story should be engaging, age-appropriate, and have a clear beginning, middle, and end. Ensure the story has a clear beginning, middle, and end, prioritizing a complete narrative over hitting an exact paragraph count.
+Return ONLY a JSON object with a "storyPages" array containing exactly ${storyLengthTargetPages} strings, each representing one paragraph of the story.
 Do not include any explanations, notes, or other text outside the JSON structure.`;
 
     const userPrompt = `Write a children's story based on this idea: ${storyDescription}`;
@@ -453,7 +501,9 @@ Do not include any explanations, notes, or other text outside the JSON structure
     console.log("Parsing OpenAI response");
     const parsedResponse = JSON.parse(content);
     
-    if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || parsedResponse.storyPages.length !== 5) {
+    if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || 
+        parsedResponse.storyPages.length !== storyInput.storyLengthTargetPages) {
+      console.error(`Expected ${storyInput.storyLengthTargetPages} paragraphs but received ${parsedResponse.storyPages?.length || 0}`);
       throw new Error('Invalid response format from OpenAI');
     }
     
@@ -475,7 +525,7 @@ async function generateStoryTextFromPhotos(generativeModel: any, storyInput: Sto
       throw new Error('No photo URLs provided for story generation');
     }
     
-    const { characters, ageRange, storyStyle, uploadedStoryPhotoUrls } = storyInput;
+    const { characters, ageRange, storyStyle, uploadedStoryPhotoUrls, storyLengthTargetPages = 6 } = storyInput;
     
     // Find the main character, or use the first character if none is marked as main
     const mainCharacter = characters.find(char => char.isMain) || characters[0];
@@ -484,9 +534,32 @@ async function generateStoryTextFromPhotos(generativeModel: any, storyInput: Sto
     const characterNames = characters.map(c => c.name).filter(name => name.trim() !== '');
     const mainCharacterName = mainCharacter.name || 'the main character';
     
+    // Create character details with gender information
+    const mainCharacterGender = mainCharacter.gender || 'unspecified';
+    const mainCharacterGenderText = mainCharacterGender !== 'unspecified' ? 
+      `The main character ${mainCharacterName} is ${mainCharacterGender}.` : '';
+      
+    // Build other characters details
+    const otherCharactersDetails = characters
+      .filter(c => !c.isMain && c.name.trim() !== '')
+      .map(c => {
+        const genderText = c.gender !== 'unspecified' ? ` (${c.gender})` : '';
+        return `${c.name}${genderText}`;
+      });
+    
+    // Create length guidance based on requested page count
+    let lengthGuidance = `a story of about ${storyLengthTargetPages} paragraphs`;
+    if (storyLengthTargetPages <= 4) {
+      lengthGuidance += " (a short story)";
+    } else if (storyLengthTargetPages >= 8) {
+      lengthGuidance += " (a longer story)";
+    } else {
+      lengthGuidance += " (a medium-length story)";
+    }
+    
     const characterPrompt = characterNames.length > 1 
-      ? `The main character is named ${mainCharacterName}. Other characters in the story are: ${characterNames.filter(n => n !== mainCharacterName).join(', ')}.`
-      : `The story should be about a character named ${mainCharacterName}.`;
+      ? `The main character is named ${mainCharacterName}. ${mainCharacterGenderText} Other characters in the story are: ${otherCharactersDetails.join(', ')}.`
+      : `The story should be about a character named ${mainCharacterName}. ${mainCharacterGenderText}`;
     
     console.log(`Processing ${uploadedStoryPhotoUrls.length} photos for story generation...`);
     
@@ -564,22 +637,20 @@ async function generateStoryTextFromPhotos(generativeModel: any, storyInput: Sto
     console.log(`Successfully processed ${imageParts.length} photos for story generation`);
     
     // Create the text prompt for Gemini
-    const textPrompt = `You are a creative children's story writer. Create a 5-paragraph story for a ${ageRange} year old child.
+    const textPrompt = `You are a creative children's story writer. Create ${lengthGuidance} for a ${ageRange} year old child.
 ${characterPrompt}
 ${storyStyle ? `The story should have a ${storyStyle} style and tone.` : ''}
 
 I've provided a sequence of photos. Create a story that incorporates these images in order, as if they represent scenes or moments in the story's progression.
 
-The story should be engaging, age-appropriate, and have a clear beginning, middle, and end.
+The story should be engaging, age-appropriate, and have a clear beginning, middle, and end. Ensure the story has a clear beginning, middle, and end, prioritizing a complete narrative over hitting an exact paragraph count.
 
 IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
 {
   "storyPages": [
     "paragraph 1",
     "paragraph 2",
-    "paragraph 3",
-    "paragraph 4",
-    "paragraph 5"
+    ... (exactly ${storyLengthTargetPages} paragraphs total)
   ]
 }
 
@@ -634,8 +705,9 @@ Do not include any explanations, notes, or other text outside the JSON structure
       const parsedResponse = JSON.parse(content);
       
       // Validate response structure
-      if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || parsedResponse.storyPages.length !== 5) {
-        console.error('Invalid response format from Gemini:', content);
+      if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || 
+          parsedResponse.storyPages.length !== storyLengthTargetPages) {
+        console.error(`Invalid response format from Gemini: Expected ${storyLengthTargetPages} paragraphs but received ${parsedResponse.storyPages?.length || 0}`, content);
         throw new Error('Invalid response format from Gemini (missing storyPages array or wrong length)');
       }
       
@@ -771,10 +843,34 @@ async function generateIllustrations(
         .filter(c => !c.isMain && c.name.trim() !== '')
         .map(c => c.name);
       
-      // Create character description for prompt
-      const characterDescription = otherCharacterNames.length > 0
-        ? `The main character's name is ${mainCharacterName}. Other characters that may appear: ${otherCharacterNames.join(', ')}.`
-        : `The main character's name is ${mainCharacterName}.`;
+      // Create richer character descriptions with gender-specific language
+      const mainCharacterGenderDescription = (() => {
+        if (mainCharacter.gender === 'female') {
+          return `a girl named ${mainCharacterName}`;
+        } else if (mainCharacter.gender === 'male') {
+          return `a boy named ${mainCharacterName}`;
+        } else {
+          return `a child named ${mainCharacterName}`;
+        }
+      })();
+      
+      // Build other characters details with gender
+      const otherCharactersDetails = characters
+        .filter(c => !c.isMain && c.name.trim() !== '')
+        .map(c => {
+          if (c.gender === 'female') {
+            return `a girl named ${c.name}`;
+          } else if (c.gender === 'male') {
+            return `a boy named ${c.name}`;
+          } else {
+            return c.name;
+          }
+        });
+      
+      // Create a comprehensive character description to guide the illustration  
+      const characterDescription = otherCharactersDetails.length > 0
+        ? `The main character is ${mainCharacterGenderDescription}. Other characters that may appear: ${otherCharactersDetails.join(', ')}.`
+        : `The main character is ${mainCharacterGenderDescription}.`;
       
       // Create enhanced prompt for image generation using a structured approach
       const promptText = `
@@ -785,6 +881,9 @@ ${pageText.replace(/\b[A-Z]{2,}\b/g, word => word.toLowerCase())}
 
 CHARACTER DETAILS:
 ${characterDescription}
+${mainCharacter.gender !== 'unspecified' ? 
+  `Ensure the main character clearly appears as ${mainCharacter.gender === 'female' ? 'a girl/female' : 'a boy/male'} in the illustration.` : 
+  ''}
 
 STYLE GUIDANCE:
 ${storyStyle ? `Primary style: ${storyStyle}` : 'Primary style: balanced and appealing for children'}
@@ -1004,7 +1103,58 @@ FINAL INSTRUCTION: This image MUST NOT contain any text, letters, numbers, writi
   return imageResults;
 }
 
-function generateStoryTitle(characters: { id: string; name: string; isMain: boolean }[]): string {
+// AI-powered title generation function
+async function generateTitleFromStory(
+  openai: OpenAI,
+  storyPagesText: string[],
+  ageRange: string,
+  mainCharacterName: string
+): Promise<string> {
+  try {
+    console.log("Generating AI title for story...");
+    
+    // Combine story text into a single string (use first 2-3 paragraphs to keep prompt size reasonable)
+    const combinedStoryText = storyPagesText.slice(0, 3).join("\n\n");
+    
+    // Create prompts for the OpenAI API
+    const systemPrompt = `You are an expert at creating engaging and age-appropriate titles for children's stories. 
+Given the following story text, generate a short, creative, and catchy title suitable for a child in the ${ageRange} age range. 
+The main character is named ${mainCharacterName}. 
+The title should be memorable, reflect the story's theme, and appeal to children.
+Output ONLY the title text, nothing else. Do not use quotes around the title.`;
+
+    const userPrompt = `Story Text:\n${combinedStoryText}\n\nGenerate a title:`;
+    
+    // Make API call to OpenAI
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 30,
+      temperature: 0.8,
+    });
+    
+    // Extract and clean the title from the response
+    let title = response.choices[0]?.message?.content?.trim() || "";
+    
+    // Remove any quotes that might have been added
+    title = title.replace(/^["'](.*)["']$/, '$1');
+    
+    console.log(`AI generated title: "${title}"`);
+    return title;
+  } catch (error) {
+    console.error("Error generating AI title:", error);
+    
+    // Fallback to a default title pattern if AI generation fails
+    console.log("Using fallback title generation method");
+    return fallbackGenerateStoryTitle(mainCharacterName);
+  }
+}
+
+// Fallback title generation in case the AI title generation fails
+function fallbackGenerateStoryTitle(mainCharacterName: string): string {
   const titlePrefixes = [
     "The Adventure of",
     "The Magical Journey of",
@@ -1013,10 +1163,7 @@ function generateStoryTitle(characters: { id: string; name: string; isMain: bool
     "The Amazing Day with"
   ];
   
-  // Find the main character, or use the first character if none is marked as main
-  const mainCharacter = characters.find(char => char.isMain) || characters[0];
-  const mainCharacterName = mainCharacter.name || 'the Hero';
-  
   const randomPrefix = titlePrefixes[Math.floor(Math.random() * titlePrefixes.length)];
   return `${randomPrefix} ${mainCharacterName}`;
 }
+
