@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from 'zod';
 
+// Define character schema for suggestion API
+const characterInfoSchema = z.object({
+  name: z.string(),
+  gender: z.enum(['female', 'male', 'unspecified']).optional().default('unspecified')
+});
+
 // Input validation schema
 const storyIdeaRequestSchema = z.object({
   photoUrls: z.array(z.string().url()).min(1, "At least one photo URL is required"),
-  characterNames: z.array(z.string()).optional(),
+  characters: z.array(characterInfoSchema).optional(),
+  characterNames: z.array(z.string()).optional(), // Kept for backward compatibility
   ageRange: z.string().optional(),
 });
 
@@ -26,7 +33,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    const { photoUrls, characterNames = [], ageRange = '5-7' } = validationResult.data;
+    const { photoUrls, characters = [], characterNames = [], ageRange = '5-7' } = validationResult.data;
     
     // Check if Google API key is configured
     if (!process.env.GOOGLE_API_KEY) {
@@ -124,9 +131,28 @@ export async function POST(request: Request) {
     
     console.log(`Successfully processed ${imageParts.length} photos for analysis`);
     
-    // Create prompt for Gemini based on character names if provided
+    // Create prompt for Gemini based on characters info if provided
     let characterPrompt = '';
-    if (characterNames.length > 0) {
+    
+    if (characters.length > 0) {
+      // Use the detailed character information including gender
+      const mainCharacter = characters[0];
+      const mainCharacterGender = mainCharacter.gender !== 'unspecified' ? 
+        ` The main character is ${mainCharacter.gender}.` : '';
+        
+      if (characters.length > 1) {
+        // Build descriptions for other characters with gender info
+        const otherCharactersDetails = characters.slice(1).map(c => {
+          const genderInfo = c.gender !== 'unspecified' ? ` (${c.gender})` : '';
+          return `${c.name}${genderInfo}`;
+        });
+        
+        characterPrompt = `The main character is ${mainCharacter.name}.${mainCharacterGender} Other characters include: ${otherCharactersDetails.join(', ')}.`;
+      } else {
+        characterPrompt = `The main character is ${mainCharacter.name}.${mainCharacterGender}`;
+      }
+    } else if (characterNames.length > 0) {
+      // Fallback to just names if no detailed character info available
       const mainCharacter = characterNames[0];
       if (characterNames.length > 1) {
         characterPrompt = `The main character is ${mainCharacter}. Other characters include: ${characterNames.slice(1).join(', ')}.`;
