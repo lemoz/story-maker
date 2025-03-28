@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ComingSoonFeature } from "@/components/coming-soon-feature";
+import RandomStoryShowcase from "@/components/random-story-showcase";
 import { 
   FileText, 
   Wand2, 
@@ -74,25 +76,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold text-center mb-12">
             See the Magic
           </h2>
-          <div className="max-w-2xl mx-auto aspect-[4/3] bg-background rounded-lg shadow-md flex items-center justify-center p-6 border">
-            <div className="flex flex-col w-full h-full">
-              <div className="flex justify-between items-center border-b pb-3 mb-4">
-                <h3 className="text-xl font-medium">Chapter 1: The Magical Adventure</h3>
-                <span className="text-sm text-muted-foreground">Page 1</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-                <div className="bg-muted rounded-md flex items-center justify-center">
-                  <p className="text-muted-foreground text-sm">Story Illustration Placeholder</p>
-                </div>
-                <div className="flex items-center">
-                  <p className="text-sm leading-relaxed">
-                    Once upon a time, in a magical forest not too far away, there lived a brave child named [Child's Name]. 
-                    Every day, they would venture into the enchanted woods to meet their animal friends and discover new wonders...
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <RandomStoryShowcase />
         </div>
       </section>
 
@@ -146,9 +130,18 @@ export default function HomePage() {
               <CardContent className="flex flex-col pt-6">
                 <FileDown size={32} className="h-8 w-8 mb-3 text-primary" />
                 <h3 className="text-xl font-semibold mb-2">Download as PDF</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground mb-4">
                   Get a beautiful, print-ready PDF of your storybook.
                 </p>
+                <div className="mt-auto">
+                  <ComingSoonFeature
+                    title="PDF Export Coming Soon!"
+                    description="We're working on letting you download beautiful, print-ready PDFs of your stories."
+                    featureName="PDF Export"
+                    buttonText="Get Notified"
+                    variant="outline"
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -170,9 +163,18 @@ export default function HomePage() {
           <h3 className="text-2xl font-semibold mb-6">
             Ready to create some magic?
           </h3>
-          <Button asChild size="lg">
-            <Link href="/create">Get Started Now</Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg">
+              <Link href="/create">Get Started Now</Link>
+            </Button>
+            <ComingSoonFeature
+              title="AI Animation Coming Soon!"
+              description="We're developing a feature to bring your stories to life with animated illustrations."
+              featureName="AI Animation"
+              buttonText="Learn About AI Animation"
+              variant="secondary"
+            />
+          </div>
         </div>
       </section>
     </main>

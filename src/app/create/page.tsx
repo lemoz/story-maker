@@ -30,6 +30,10 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { 
+  StoryGenerationProgress, 
+  type StoryGenerationStatus 
+} from "@/components/story-generation-progress";
 import { Loader2, X, Upload, Trash2, Camera } from "lucide-react";
 
 // Character interface
@@ -64,6 +68,10 @@ export default function CreateStoryPage() {
   // State hooks for form submission
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showProgress, setShowProgress] = useState<boolean>(false);
+  const [generationStatus, setGenerationStatus] = useState<StoryGenerationStatus>({
+    step: "validating"
+  });
 
   // Cleanup object URLs to prevent memory leaks
   useEffect(() => {
@@ -181,19 +189,26 @@ export default function CreateStoryPage() {
     }
   };
   
-  // Form submission handler
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    // Clear previous error
-    setError(null);
-    
-    // Set loading state
-    setIsLoading(true);
-    
+  // Handle email collection  
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  
+  const handleEmailSubmit = (email: string) => {
+    setUserEmail(email);
+    console.log(`Will email story to: ${email}`);
+    // In a real implementation, store this email for later use
+  };
+  
+  // The main story generation function with real-time progress using SSE
+  const continueStoryGeneration = async () => {
     try {
       // First, upload any character photos that need to be uploaded
       const updatedCharacters = [...characters];
+      
+      // Initial validation state
+      setGenerationStatus({ 
+        step: "validating",
+        detail: "Preparing character photos..."
+      });
       
       // Process all uploads in parallel for efficiency
       const uploadPromises = updatedCharacters.map(async (char, index) => {
@@ -219,43 +234,211 @@ export default function CreateStoryPage() {
         uploadedPhotoUrl
       }));
       
-      // Make API call to generate story
-      const response = await fetch('/api/generate-story', {
+      // Initialize EventSource for Server-Sent Events
+      // This will allow the server to send progress updates in real-time
+      const params = new URLSearchParams();
+      const requestBody = {
+        characters: charactersForAPI,
+        storyPlotOption,
+        storyDescription,
+        ageRange,
+        storyStyle,
+        email: userEmail // Include email if provided
+      };
+      
+      // Prepare the fetch POST request to the SSE endpoint
+      const streamResponse = await fetch('/api/generate-story-stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characters: charactersForAPI,
-          storyPlotOption,
-          storyDescription,
-          ageRange,
-          storyStyle
-        })
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
       });
       
-      // Handle response
-      if (!response.ok) {
-        // Try to parse error message from response
-        const errorData = await response.json().catch(() => null);
-        setError(errorData?.error || `Request failed with status ${response.status}`);
-        return;
+      // Check for immediate errors
+      if (!streamResponse.ok) {
+        throw new Error(`Failed to initialize story generation: ${streamResponse.status}`);
       }
       
-      // Parse success response
-      const data = await response.json();
+      // Get the readable stream from the response
+      const reader = streamResponse.body?.getReader();
       
-      // Redirect to story viewer page
-      router.push(`/story/${data.storyId}`);
+      if (!reader) {
+        throw new Error('Failed to establish stream connection');
+      }
       
-    } catch (err) {
-      console.error('Submission failed:', err);
-      setError('Failed to create story. Please try again.');
+      // Create a text decoder for the stream
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      // Process incoming events from the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          console.log('Stream closed by server');
+          break;
+        }
+        
+        // Decode the chunk and add it to our buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete events in the buffer
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || ''; // Keep the last incomplete event in the buffer
+        
+        for (const event of events) {
+          if (!event.trim()) continue;
+          
+          // Parse the event
+          let eventType;
+          let eventData;
+          
+          try {
+            const eventLines = event.split('\n');
+            const eventTypeStr = eventLines.find(line => line.startsWith('event:'));
+            const dataStr = eventLines.find(line => line.startsWith('data:'));
+            
+            if (!eventTypeStr || !dataStr) {
+              console.warn('Malformed event:', event);
+              continue;
+            }
+            
+            eventType = eventTypeStr.slice(7).trim(); // Remove "event: "
+            eventData = JSON.parse(dataStr.slice(6).trim()); // Remove "data: "
+            
+            console.log(`Received event: ${eventType}`, eventData);
+          } catch (parseError) {
+            console.error('Error parsing event:', parseError, 'Event:', event);
+            continue;
+          }
+          
+          // Handle different event types
+          switch (eventType) {
+            case 'connection':
+              console.log('Connection established with server');
+              break;
+              
+            case 'progress':
+              // Update UI based on progress event
+              if (eventData.step === 'validating') {
+                setGenerationStatus({
+                  step: 'validating',
+                  detail: eventData.message
+                });
+              } else if (eventData.step === 'writing') {
+                setGenerationStatus({
+                  step: 'writing',
+                  detail: eventData.message
+                });
+              } else if (eventData.step === 'illustrating') {
+                setGenerationStatus({
+                  step: 'illustrating',
+                  illustrationProgress: eventData.illustrationProgress || {
+                    current: 0,
+                    total: 5,
+                    detail: eventData.message
+                  }
+                });
+              } else if (eventData.step === 'saving') {
+                setGenerationStatus({
+                  step: 'saving',
+                  detail: eventData.message
+                });
+              }
+              break;
+              
+            case 'image_preview':
+              // Update the UI with the preview image
+              setGenerationStatus(prev => {
+                if (prev.step !== 'illustrating' || !prev.illustrationProgress) {
+                  return prev;
+                }
+                
+                return {
+                  ...prev,
+                  illustrationProgress: {
+                    ...prev.illustrationProgress,
+                    previewUrl: eventData.previewUrl
+                  }
+                };
+              });
+              break;
+              
+            case 'complete':
+              // Story generation completed successfully
+              setGenerationStatus({ step: 'complete' });
+              
+              // Small delay before redirecting
+              setTimeout(() => {
+                router.push(`/story/${eventData.storyId}`);
+              }, 1500);
+              break;
+              
+            case 'error':
+              // Handle error
+              console.error('Received error event:', eventData);
+              setError(eventData.message);
+              setGenerationStatus({
+                step: 'error',
+                error: eventData.message
+              });
+              break;
+          }
+        }
+      }
+      
+    } catch (err: any) {
+      console.error('Story generation failed:', err);
+      const errorMsg = err.message || 'Failed to create story. Please try again.';
+      setError(errorMsg);
+      setGenerationStatus({ 
+        step: 'error',
+        error: errorMsg
+      });
     } finally {
-      setIsLoading(false);
+      // Don't hide the progress dialog on error - user can close it
+      if (generationStatus.step !== 'error') {
+        setIsLoading(false);
+        // Don't close progress dialog on completion - we'll redirect
+      }
     }
+  };
+  
+  // Form submission handler
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    // Clear previous error
+    setError(null);
+    
+    // Set loading state and show progress dialog
+    setIsLoading(true);
+    setShowProgress(true);
+    setGenerationStatus({ step: "validating" });
+    
+    // Validation step - small delay for UI feedback
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Start generation process
+    continueStoryGeneration();
   };
 
   return (
     <div className="container mx-auto max-w-3xl py-10 px-4">
+      {/* Story Generation Progress Dialog */}
+      <StoryGenerationProgress
+        open={showProgress}
+        onOpenChange={(open) => {
+          // Only allow closing if there's an error or we're done
+          if (generationStatus.step === "error" || generationStatus.step === "complete") {
+            setShowProgress(open);
+          }
+        }}
+        status={generationStatus}
+        onEmailSubmit={handleEmailSubmit}
+      />
+      
       <h1 className="text-3xl font-bold text-center mb-2">Create Your Story</h1>
       <p className="text-muted-foreground text-center mb-8">
         Fill in the details below to generate a personalized story.
