@@ -3,11 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle, Check, Edit, Save, X, RefreshCw, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 // Story data interfaces
 interface StoryPage {
@@ -33,6 +37,16 @@ export default function StoryViewerPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
+  
+  // Text editing state
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editedText, setEditedText] = useState('');
+  const [isSavingText, setIsSavingText] = useState(false);
+  
+  // Image regeneration state
+  const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
+  const [showImageRegenDialog, setShowImageRegenDialog] = useState(false);
+  const [imageRegenComment, setImageRegenComment] = useState('');
 
   // Fetch story data
   useEffect(() => {
@@ -63,6 +77,8 @@ export default function StoryViewerPage() {
   // Navigate to the previous page
   const goToPreviousPage = () => {
     if (currentPageIndex > 0) {
+      // Reset editing states when changing pages
+      setIsEditingText(false);
       setCurrentPageIndex(currentPageIndex - 1);
     }
   };
@@ -70,6 +86,8 @@ export default function StoryViewerPage() {
   // Navigate to the next page
   const goToNextPage = () => {
     if (storyData && currentPageIndex < storyData.pages.length - 1) {
+      // Reset editing states when changing pages
+      setIsEditingText(false);
       setCurrentPageIndex(currentPageIndex + 1);
     }
   };
@@ -83,6 +101,109 @@ export default function StoryViewerPage() {
       setTimeout(() => setShareStatus('idle'), 2500);
     } catch (err) {
       console.error('Failed to copy URL to clipboard:', err);
+    }
+  };
+  
+  // Start text editing
+  const handleEditText = () => {
+    if (storyData) {
+      setEditedText(storyData.pages[currentPageIndex].text);
+      setIsEditingText(true);
+    }
+  };
+
+  // Save edited text
+  const handleSaveText = async () => {
+    if (!storyData) return;
+    
+    setIsSavingText(true);
+    try {
+      const response = await fetch('/api/update-story-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          storyId,
+          pageIndex: currentPageIndex,
+          newText: editedText.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update story text');
+      }
+      
+      // Update local state with new text
+      const updatedPages = [...storyData.pages];
+      updatedPages[currentPageIndex] = {
+        ...updatedPages[currentPageIndex],
+        text: editedText.trim()
+      };
+      
+      setStoryData({
+        ...storyData,
+        pages: updatedPages
+      });
+      
+      setIsEditingText(false);
+      toast.success('Story text updated successfully');
+    } catch (err: any) {
+      console.error('Error saving text:', err);
+      toast.error(err.message || 'Failed to update story text');
+    } finally {
+      setIsSavingText(false);
+    }
+  };
+  
+  // Handle image regeneration dialog submission
+  const handleSubmitImageRegen = async () => {
+    if (!storyData) return;
+    
+    setIsRegeneratingImage(true);
+    setShowImageRegenDialog(false);
+    
+    try {
+      const response = await fetch('/api/regenerate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          storyId,
+          pageIndex: currentPageIndex,
+          comment: imageRegenComment.trim()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to regenerate image');
+      }
+      
+      const data = await response.json();
+      
+      // Update local state with new image URL
+      const updatedPages = [...storyData.pages];
+      updatedPages[currentPageIndex] = {
+        ...updatedPages[currentPageIndex],
+        imageUrl: data.imageUrl
+      };
+      
+      setStoryData({
+        ...storyData,
+        pages: updatedPages
+      });
+      
+      // Reset comment for next time
+      setImageRegenComment('');
+      toast.success('Image regenerated successfully');
+    } catch (err: any) {
+      console.error('Error regenerating image:', err);
+      toast.error(err.message || 'Failed to regenerate image');
+    } finally {
+      setIsRegeneratingImage(false);
     }
   };
 
@@ -207,28 +328,145 @@ export default function StoryViewerPage() {
             <div className="flex flex-col md:flex-row gap-6">
               {/* Image area */}
               <div className="md:w-1/2">
-                {currentPage.imageUrl ? (
-                  <div className="aspect-square relative rounded-lg overflow-hidden bg-muted">
-                    <img 
-                      src={currentPage.imageUrl} 
-                      alt={`Illustration for page ${currentPageIndex + 1}`}
-                      className="object-cover w-full h-full"
-                    />
-                  </div>
-                ) : (
-                  <div className="aspect-square flex items-center justify-center bg-muted rounded-lg text-muted-foreground">
-                    Illustration Placeholder
-                  </div>
-                )}
+                <div className="relative">
+                  {currentPage.imageUrl ? (
+                    <div className="aspect-square relative rounded-lg overflow-hidden bg-muted">
+                      <img 
+                        src={currentPage.imageUrl} 
+                        alt={`Illustration for page ${currentPageIndex + 1}`}
+                        className="object-cover w-full h-full"
+                      />
+                      {isRegeneratingImage && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <Loader2 className="h-12 w-12 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="aspect-square flex items-center justify-center bg-muted rounded-lg text-muted-foreground">
+                      Illustration Placeholder
+                    </div>
+                  )}
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="absolute bottom-3 right-3 bg-background/80 backdrop-blur-sm"
+                    onClick={() => setShowImageRegenDialog(true)}
+                    disabled={isRegeneratingImage || !currentPage.imageUrl}
+                  >
+                    {isRegeneratingImage ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4 mr-1" /> Regenerate Image
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
               
               {/* Text area */}
               <div className="md:w-1/2">
-                <p className="text-lg leading-relaxed">{currentPage.text}</p>
+                <div className="relative">
+                  {isEditingText ? (
+                    <div className="space-y-4">
+                      <Textarea 
+                        value={editedText} 
+                        onChange={(e) => setEditedText(e.target.value)}
+                        className="min-h-36 text-lg"
+                        placeholder="Enter the story text"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setIsEditingText(false)} 
+                          disabled={isSavingText}
+                        >
+                          <X className="h-4 w-4 mr-1" /> Cancel
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          onClick={handleSaveText} 
+                          disabled={isSavingText || editedText.trim() === ''}
+                        >
+                          {isSavingText ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-1" /> Save
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-lg leading-relaxed">{currentPage.text}</p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="absolute top-0 right-0" 
+                        onClick={handleEditText}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
+        
+        {/* Image Regeneration Dialog */}
+        <Dialog open={showImageRegenDialog} onOpenChange={setShowImageRegenDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Regenerate Image</DialogTitle>
+              <DialogDescription>
+                Provide additional details for the new image. This will help the AI generate a better image based on your instructions.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="comment">Special Instructions (optional)</Label>
+                <Textarea
+                  id="comment"
+                  placeholder="Example: Make it more colorful, use a watercolor style, show the character smiling, etc."
+                  value={imageRegenComment}
+                  onChange={(e) => setImageRegenComment(e.target.value)}
+                  className="min-h-24"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowImageRegenDialog(false)}
+                disabled={isRegeneratingImage}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSubmitImageRegen}
+                disabled={isRegeneratingImage}
+              >
+                {isRegeneratingImage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Generating...
+                  </>
+                ) : (
+                  "Generate New Image"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
