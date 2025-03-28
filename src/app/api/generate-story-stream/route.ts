@@ -49,26 +49,33 @@ function sendEvent(controller: ReadableStreamDefaultController, eventType: strin
 // Helper function to upload Base64 image to Vercel Blob
 async function uploadImageToBlobStorage(base64Data: string, storyId: string, pageIndex: number): Promise<string | null> {
   try {
+    console.log(`BEGIN uploadImageToBlobStorage for Page ${pageIndex + 1}`);
+    
     // Check if BLOB_READ_WRITE_TOKEN is configured
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      console.error('Missing BLOB_READ_WRITE_TOKEN environment variable.');
+      console.error(`Page ${pageIndex + 1}: Missing BLOB_READ_WRITE_TOKEN environment variable.`);
       return null;
     }
 
     // Extract the actual base64 content (remove the data:image/...;base64, part)
+    console.log(`Page ${pageIndex + 1}: Extracting base64 content from data URL...`);
     const base64String = base64Data.split(',')[1];
     if (!base64String) {
-      console.error('Invalid base64 data string received.');
+      console.error(`Page ${pageIndex + 1}: Invalid base64 data string received.`);
       return null;
     }
 
     // Convert base64 to Buffer
+    console.log(`Page ${pageIndex + 1}: Converting base64 to buffer...`);
     const buffer = Buffer.from(base64String, 'base64');
+    console.log(`Page ${pageIndex + 1}: Buffer size: ${buffer.length} bytes`);
 
     // Generate a unique filename
     const filename = `stories/${storyId}/page-${pageIndex + 1}-${randomUUID()}.png`;
+    console.log(`Page ${pageIndex + 1}: Generated filename: ${filename}`);
 
-    console.log(`Uploading image to Vercel Blob: ${filename}`);
+    console.log(`Page ${pageIndex + 1}: Starting Vercel Blob PUT operation...`);
+    console.log(`Page ${pageIndex + 1}: PUT parameters - filename: ${filename}, contentType: image/png, access: public`);
 
     // Upload to Vercel Blob
     const blob = await put(filename, buffer, {
@@ -76,11 +83,12 @@ async function uploadImageToBlobStorage(base64Data: string, storyId: string, pag
       contentType: 'image/png', // Explicitly set content type
     });
 
-    console.log(`Image uploaded successfully: ${blob.url}`);
+    console.log(`Page ${pageIndex + 1}: Image uploaded successfully. URL: ${blob.url}`);
     return blob.url; // Return the public URL
 
   } catch (error) {
-    console.error(`Failed to upload image for page ${pageIndex + 1}:`, error);
+    console.error(`ERROR during image upload for Page ${pageIndex + 1}:`, error);
+    console.error(`Page ${pageIndex + 1}: Stack trace:`, error instanceof Error ? error.stack : 'No stack trace available');
     return null;
   }
 }
@@ -259,7 +267,18 @@ export async function POST(request: NextRequest) {
             const storyDataJSON = JSON.stringify(storyData);
             const dataSizeInKB = Math.round(storyDataJSON.length / 1024);
             console.log(`Story data size (excluding images): ${dataSizeInKB} KB`);
-            await redisClient.set(`story:${storyId}`, storyDataJSON, { EX: 86400 });
+            
+            console.log("Illustration loop completed. Attempting to save final data to Redis...");
+            console.log(`Redis key: story:${storyId}, Data size: ${dataSizeInKB} KB, Expiration: 86400 seconds (24 hours)`);
+            
+            try {
+              await redisClient.set(`story:${storyId}`, storyDataJSON, { EX: 86400 });
+              console.log("Story saved to Redis successfully.");
+            } catch (redisError) {
+              console.error("ERROR during Redis save operation:", redisError);
+              console.error("Redis error stack:", redisError instanceof Error ? redisError.stack : 'No stack trace available');
+              throw redisError; // Rethrow to be caught by the outer try/catch
+            }
             
             // Handle email subscription if provided
             if (storyInput.email) {
@@ -282,19 +301,26 @@ export async function POST(request: NextRequest) {
             });
             
           } catch (error: any) {
-            console.error('Error in story generation process:', error);
+            console.error('ERROR during story generation process:', error);
+            console.error('Story generation error stack:', error instanceof Error ? error.stack : 'No stack trace available');
+            
             let errorMessage = 'An unexpected error occurred during story generation';
             
             if (error.message && error.message.includes('OOM command not allowed')) {
+              console.error('ERROR: Redis OOM (Out of Memory) detected');
               errorMessage = 'Memory limit exceeded when storing the story. This might be due to large image sizes.';
             } else if (error.message && error.message.includes('Failed to generate story text')) {
+              console.error('ERROR: Story text generation failure detected');
               errorMessage = 'Failed to generate the story text. Please try again or modify your description.';
             } else if (error.message && error.message.includes('Redis connection failed')) {
+              console.error('ERROR: Redis connection issue detected');
               errorMessage = 'Database connection error. Please try again later.';
             } else if (error.message?.includes('Failed to upload image')) {
+              console.error('ERROR: Image upload failure detected');
               errorMessage = 'Part of the story generation failed (image upload). The story might be incomplete.';
             }
             
+            console.log('Sending error event to client:', errorMessage);
             sendEvent(controller, 'error', { message: errorMessage });
           }
           
@@ -592,6 +618,7 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
       
       // Upload the image if we got data
       if (base64ImageData) {
+        console.log(`Page ${index + 1}: Preparing to upload base64 image to blob storage. Data length: ${base64ImageData.length} characters`);
         sendEvent(controller, 'progress', {
           step: 'illustrating',
           status: 'in_progress',
@@ -603,12 +630,15 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
           }
         });
         
+        console.log(`Page ${index + 1}: Calling uploadImageToBlobStorage function...`);
         const imageUrl = await uploadImageToBlobStorage(base64ImageData, storyId, index);
+        
         if (imageUrl) {
           imageResults[index] = imageUrl; // Store the URL
-          console.log(`Successfully uploaded image and stored URL for page ${index + 1}`);
+          console.log(`Page ${index + 1}: Successfully uploaded image and stored URL: ${imageUrl}`);
           
           // Send completion event for this illustration
+          console.log(`Page ${index + 1}: Sending progress event to client.`);
           sendEvent(controller, 'progress', {
             step: 'illustrating',
             status: 'in_progress',
@@ -620,7 +650,8 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
             }
           });
         } else {
-          console.error(`Failed to upload image for page ${index + 1}. URL will be null.`);
+          console.error(`ERROR: Failed to upload image for page ${index + 1}. URL will be null.`);
+          console.log(`Page ${index + 1}: Sending error progress event to client.`);
           sendEvent(controller, 'progress', {
             step: 'illustrating',
             status: 'in_progress',
@@ -650,7 +681,10 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
     }
   }
   
+  console.log("Illustration loop completed. All images processed.");
+  
   // Send final completion event for illustration phase
+  console.log("Sending final illustration completion event to client.");
   sendEvent(controller, 'progress', {
     step: 'illustrating',
     status: 'complete',
@@ -662,6 +696,7 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
     }
   });
   
+  console.log(`Returning array of ${imageResults.length} image URLs. Null count: ${imageResults.filter(url => url === null).length}`);
   return imageResults;
 }
 
