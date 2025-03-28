@@ -19,9 +19,10 @@ const storyInputSchema = z.object({
   characters: z.array(characterSchema).min(1, "At least one character is required"),
   ageRange: z.string({ required_error: "Age range is required" }),
   storyPlotOption: z.enum(["photos", "describe"]),
-  storyDescription: z.string().min(1, "Story description is required"),
+  storyDescription: z.string().min(1, "Story description is required when using describe mode").optional(),
   storyStyle: z.string().optional().nullable(),
   email: z.string().email().optional().nullable(),
+  uploadedStoryPhotoUrls: z.array(z.string().url()).optional(), // URLs of uploaded story photos
 });
 
 type StoryInput = z.infer<typeof storyInputSchema>;
@@ -129,6 +130,30 @@ export async function POST(request: NextRequest) {
         }
 
         const storyInput = validationResult.data;
+        
+        // Additional validation for story photos when using "photos" option
+        if (storyInput.storyPlotOption === "photos" && 
+            (!storyInput.uploadedStoryPhotoUrls || storyInput.uploadedStoryPhotoUrls.length === 0)) {
+          console.error("Validation error: No story photos provided for photos mode");
+          sendEvent(controller, 'error', { 
+            message: 'No story photos provided', 
+            details: 'Please upload at least one photo for photo-based story generation' 
+          });
+          controller.close();
+          return;
+        }
+        
+        // For describe mode, ensure story description is provided
+        if (storyInput.storyPlotOption === "describe" && 
+            (!storyInput.storyDescription || storyInput.storyDescription.trim() === "")) {
+          console.error("Validation error: No story description provided for describe mode");
+          sendEvent(controller, 'error', { 
+            message: 'No story description provided', 
+            details: 'Please provide a story description for text-based story generation' 
+          });
+          controller.close();
+          return;
+        }
         sendEvent(controller, 'progress', { 
           step: 'validating', 
           status: 'complete', 
@@ -212,7 +237,28 @@ export async function POST(request: NextRequest) {
               message: 'Creating your unique story...' 
             });
             
-            const storyPagesText = await generateStoryText(openai, storyInput);
+            let storyPagesText: string[];
+            
+            // Choose the appropriate story generation method based on storyPlotOption
+            if (storyInput.storyPlotOption === "photos" && storyInput.uploadedStoryPhotoUrls) {
+              // Generate story from photos using Gemini
+              sendEvent(controller, 'progress', { 
+                step: 'writing', 
+                status: 'in_progress', 
+                message: 'Analyzing photos and crafting your story...' 
+              });
+              
+              storyPagesText = await generateStoryTextFromPhotos(generativeModel, storyInput);
+            } else {
+              // Generate story from text description using OpenAI
+              sendEvent(controller, 'progress', { 
+                step: 'writing', 
+                status: 'in_progress', 
+                message: 'Creating your story from description...' 
+              });
+              
+              storyPagesText = await generateStoryText(openai, storyInput);
+            }
             
             sendEvent(controller, 'progress', { 
               step: 'writing', 
@@ -360,8 +406,11 @@ export async function POST(request: NextRequest) {
   });
 }
 
+// Function to generate story text from text description using OpenAI
 async function generateStoryText(openai: OpenAI, storyInput: StoryInput): Promise<string[]> {
   try {
+    console.log("Starting generateStoryText with OpenAI...");
+    
     const { characters, ageRange, storyDescription, storyStyle } = storyInput;
     
     // Find the main character, or use the first character if none is marked as main
@@ -384,6 +433,7 @@ Do not include any explanations, notes, or other text outside the JSON structure
 
     const userPrompt = `Write a children's story based on this idea: ${storyDescription}`;
     
+    console.log("Making OpenAI API call for story generation...");
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -400,17 +450,206 @@ Do not include any explanations, notes, or other text outside the JSON structure
       throw new Error('No content returned from OpenAI');
     }
     
+    console.log("Parsing OpenAI response");
     const parsedResponse = JSON.parse(content);
     
     if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || parsedResponse.storyPages.length !== 5) {
       throw new Error('Invalid response format from OpenAI');
     }
     
+    console.log("Successfully generated story text with OpenAI");
     return parsedResponse.storyPages;
     
   } catch (error) {
-    console.error('Error generating story text:', error);
-    throw new Error('Failed to generate story text');
+    console.error('Error generating story text with OpenAI:', error);
+    throw new Error('Failed to generate story text with OpenAI');
+  }
+}
+
+// Function to generate story text from photos using Gemini
+async function generateStoryTextFromPhotos(generativeModel: any, storyInput: StoryInput): Promise<string[]> {
+  try {
+    console.log("Starting generateStoryTextFromPhotos with Gemini...");
+    
+    if (!storyInput.uploadedStoryPhotoUrls || storyInput.uploadedStoryPhotoUrls.length === 0) {
+      throw new Error('No photo URLs provided for story generation');
+    }
+    
+    const { characters, ageRange, storyStyle, uploadedStoryPhotoUrls } = storyInput;
+    
+    // Find the main character, or use the first character if none is marked as main
+    const mainCharacter = characters.find(char => char.isMain) || characters[0];
+    
+    // Get all character names for the story
+    const characterNames = characters.map(c => c.name).filter(name => name.trim() !== '');
+    const mainCharacterName = mainCharacter.name || 'the main character';
+    
+    const characterPrompt = characterNames.length > 1 
+      ? `The main character is named ${mainCharacterName}. Other characters in the story are: ${characterNames.filter(n => n !== mainCharacterName).join(', ')}.`
+      : `The story should be about a character named ${mainCharacterName}.`;
+    
+    console.log(`Processing ${uploadedStoryPhotoUrls.length} photos for story generation...`);
+    
+    // Fetch and process each photo
+    const imagePartsPromises = uploadedStoryPhotoUrls.map(async (photoUrl, index) => {
+      try {
+        console.log(`Fetching story photo ${index + 1} from: ${photoUrl}`);
+        
+        // Fetch the image
+        const response = await fetch(photoUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+        
+        // Get image data as ArrayBuffer
+        const arrayBuffer = await response.arrayBuffer();
+        
+        // Convert to base64
+        const base64String = Buffer.from(arrayBuffer).toString('base64');
+        
+        // Determine MIME type from Content-Type header or extension
+        let mimeType = response.headers.get('Content-Type');
+        
+        // If we couldn't get MIME type from headers, try to infer from URL
+        if (!mimeType || mimeType === 'application/octet-stream') {
+          // Extract extension from URL, if any
+          const extension = photoUrl.split('.').pop()?.toLowerCase();
+          if (extension) {
+            switch (extension) {
+              case 'jpg':
+              case 'jpeg':
+                mimeType = 'image/jpeg';
+                break;
+              case 'png':
+                mimeType = 'image/png';
+                break;
+              case 'gif':
+                mimeType = 'image/gif';
+                break;
+              case 'webp':
+                mimeType = 'image/webp';
+                break;
+              case 'svg':
+                mimeType = 'image/svg+xml';
+                break;
+              default:
+                // Default fallback
+                mimeType = 'image/jpeg';
+            }
+          } else {
+            // Default fallback if no extension found
+            mimeType = 'image/jpeg';
+          }
+        }
+        
+        console.log(`Successfully processed story photo ${index + 1}, MIME type: ${mimeType}, Size: ${arrayBuffer.byteLength} bytes`);
+        
+        // Return in the format expected by the Gemini API
+        return {
+          inlineData: {
+            data: base64String,
+            mimeType: mimeType
+          }
+        };
+      } catch (error) {
+        console.error(`Error processing story photo ${index + 1}:`, error);
+        throw error; // Re-throw to be caught by the outer try/catch
+      }
+    });
+    
+    // Wait for all photos to be processed
+    const imageParts = await Promise.all(imagePartsPromises);
+    
+    console.log(`Successfully processed ${imageParts.length} photos for story generation`);
+    
+    // Create the text prompt for Gemini
+    const textPrompt = `You are a creative children's story writer. Create a 5-paragraph story for a ${ageRange} year old child.
+${characterPrompt}
+${storyStyle ? `The story should have a ${storyStyle} style and tone.` : ''}
+
+I've provided a sequence of photos. Create a story that incorporates these images in order, as if they represent scenes or moments in the story's progression.
+
+The story should be engaging, age-appropriate, and have a clear beginning, middle, and end.
+
+IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
+{
+  "storyPages": [
+    "paragraph 1",
+    "paragraph 2",
+    "paragraph 3",
+    "paragraph 4",
+    "paragraph 5"
+  ]
+}
+
+Each paragraph should be a string with approximately 3-4 sentences.
+Do not include any explanations, notes, or other text outside the JSON structure.`;
+    
+    // Construct the complete parts array for the API call
+    const promptParts = [
+      { text: textPrompt },
+      ...imageParts
+    ];
+    
+    console.log("Creating Gemini model instance for photo-based story generation...");
+    
+    // Use Gemini 1.5 Flash for multimodal generation with fast response
+    const model = generativeModel.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      // Configure safety settings to avoid content filtering issues
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" } as any,
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" } as any,
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" } as any,
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" } as any,
+      ],
+    });
+    
+    console.log("Making Gemini API call for photo-based story generation...");
+    
+    // Make the API call to Gemini with our prompt parts
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: promptParts }],
+      generationConfig: {
+        responseMimeType: "application/json", // Request JSON response
+        temperature: 0.7,                     // Add some creativity
+        maxOutputTokens: 2048,                // Enough for 5 paragraphs
+      },
+    });
+    
+    const response = await result.response;
+    const content = response.text();
+    
+    console.log("Received response from Gemini API for photo-based story");
+    
+    if (!content) {
+      throw new Error('No content returned from Gemini API');
+    }
+    
+    console.log("Parsing JSON response from Gemini");
+    
+    try {
+      // Parse JSON response
+      const parsedResponse = JSON.parse(content);
+      
+      // Validate response structure
+      if (!parsedResponse.storyPages || !Array.isArray(parsedResponse.storyPages) || parsedResponse.storyPages.length !== 5) {
+        console.error('Invalid response format from Gemini:', content);
+        throw new Error('Invalid response format from Gemini (missing storyPages array or wrong length)');
+      }
+      
+      console.log("Successfully parsed Gemini response into story pages");
+      return parsedResponse.storyPages;
+    } catch (parseError) {
+      console.error('Error parsing Gemini response:', parseError);
+      console.error('Raw response:', content);
+      throw new Error('Failed to parse Gemini response as JSON');
+    }
+    
+  } catch (error) {
+    console.error('Error generating story text from photos:', error);
+    throw new Error(`Failed to generate story from photos: ${error.message}`);
   }
 }
 
@@ -432,17 +671,50 @@ async function fetchCharacterPhoto(photoUrl: string): Promise<{ data: string, mi
     // Convert to base64
     const base64String = Buffer.from(arrayBuffer).toString('base64');
     
-    // Determine MIME type from Content-Type header or fallback to a default
-    const contentType = response.headers.get('Content-Type') || 'image/jpeg';
+    // Determine MIME type from Content-Type header or extension
+    let mimeType = response.headers.get('Content-Type');
     
-    console.log(`Successfully fetched and processed character photo, MIME type: ${contentType}`);
+    // If we couldn't get MIME type from headers, try to infer from URL
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      // Extract extension from URL, if any
+      const extension = photoUrl.split('.').pop()?.toLowerCase();
+      if (extension) {
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          case 'webp':
+            mimeType = 'image/webp';
+            break;
+          case 'svg':
+            mimeType = 'image/svg+xml';
+            break;
+          default:
+            // Default fallback
+            mimeType = 'image/jpeg';
+        }
+      } else {
+        // Default fallback if no extension found
+        mimeType = 'image/jpeg';
+      }
+    }
+    
+    console.log(`Successfully fetched and processed character photo, MIME type: ${mimeType}, Size: ${arrayBuffer.byteLength} bytes`);
     
     return {
-      data: base64String,
-      mimeType: contentType
+      data: base64String, // Return just the base64 string without data URL prefix, required for Gemini API
+      mimeType: mimeType
     };
   } catch (error) {
     console.error('Error fetching character photo:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
     return null;
   }
 }
