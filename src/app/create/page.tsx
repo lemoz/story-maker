@@ -34,7 +34,7 @@ import {
   StoryGenerationProgress, 
   type StoryGenerationStatus 
 } from "@/components/story-generation-progress";
-import { Loader2, X, Upload, Trash2, Camera } from "lucide-react";
+import { Loader2, X, Trash2, Camera } from "lucide-react";
 
 // Character interface
 interface Character {
@@ -234,9 +234,8 @@ export default function CreateStoryPage() {
         uploadedPhotoUrl
       }));
       
-      // Initialize EventSource for Server-Sent Events
+      // Initialize for Server-Sent Events
       // This will allow the server to send progress updates in real-time
-      const params = new URLSearchParams();
       const requestBody = {
         characters: charactersForAPI,
         storyPlotOption,

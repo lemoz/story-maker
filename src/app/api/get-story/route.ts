@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         console.log("--- Attempting node-redis Connection ---");
         console.log("Using REDIS_URL:", process.env.REDIS_URL);
         redisClient = createClient({ url: process.env.REDIS_URL });
-        redisClient.on('error', (err) => console.error('Redis Client Error', err)); // Add error listener
+        redisClient.on('error', (err: Error) => console.error('Redis Client Error', err)); // Add error listener
         await redisClient.connect(); // Connect explicitly
         console.log("node-redis client connected.");
     } catch (connectError) {

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle, Check, Edit, Save, X, RefreshCw, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Share2, Loader2, AlertCircle, Check, Edit, Save, X, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';

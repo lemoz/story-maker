@@ -40,8 +40,7 @@ interface StoryData {
   pages: StoryPage[];
 }
 
-// Declare redisClient at the outer scope
-let redisClient: any = undefined;
+// Redis client will be initialized in the request handler
 
 // --- NEW: Helper function to upload Base64 image to Vercel Blob ---
 async function uploadImageToBlobStorage(base64Data: string, storyId: string, pageIndex: number): Promise<string | null> {
@@ -131,12 +130,12 @@ export async function POST(request: Request) {
       // Get the specific Gemini model for image generation
       const generativeModel = genAI.getGenerativeModel({
         model: "gemini-2.0-flash-exp-image-generation",
-        // Define safety settings using string literals
+        // Use type assertion to satisfy TypeScript
         safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" } as any,
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" } as any,
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" } as any,
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" } as any,
         ],
       });
       
@@ -151,7 +150,7 @@ export async function POST(request: Request) {
           console.log("--- Attempting node-redis Connection ---");
           console.log("Using REDIS_URL:", process.env.REDIS_URL);
           redisClient = createClient({ url: process.env.REDIS_URL });
-          redisClient.on('error', (err) => console.error('Redis Client Error', err)); // Add error listener
+          redisClient.on('error', (err: Error) => console.error('Redis Client Error', err)); // Add error listener
           await redisClient.connect(); // Connect explicitly
           console.log("node-redis client connected.");
       } catch (connectError) {
@@ -205,7 +204,7 @@ export async function POST(request: Request) {
       } catch (error: any) {
         console.error('Error in story generation process:', error);
         let errorMessage = 'An unexpected error occurred during story generation';
-        let status = 500;
+        const status = 500;
 
         if (error.message && error.message.includes('OOM command not allowed')) {
           errorMessage = 'Memory limit exceeded when storing the story. This might be due to large image sizes.';
@@ -404,12 +403,13 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
       }
       
       // Call generateContent with the @google/generative-ai structure
+      // Use type assertion to work around TypeScript errors while keeping functionality
       const result = await generativeModel.generateContent({
         contents: [{ role: "user", parts: contentParts }],
         generationConfig: {
           responseModalities: ["Text", "Image"],
         },
-      });
+      } as any);
       
       const response = await result.response;
       
@@ -420,7 +420,7 @@ Style: Colorful, whimsical, high-quality children's book illustration, digital a
       let base64ImageData: string | null = null;
 
       if (imageCandidate?.content?.parts) {
-        const imagePart = imageCandidate.content.parts.find(part => part.inlineData?.data);
+        const imagePart = imageCandidate.content.parts.find((part: any) => part.inlineData?.data);
         if (imagePart?.inlineData?.data) {
           const mimeType = imagePart.inlineData.mimeType || 'image/png';
           base64ImageData = `data:${mimeType};base64,${imagePart.inlineData.data}`;

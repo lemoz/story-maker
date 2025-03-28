@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     
     try {
       redisClient = createClient({ url: process.env.REDIS_URL });
-      redisClient.on('error', (err) => console.error('Redis Client Error', err));
+      redisClient.on('error', (err: Error) => console.error('Redis Client Error', err));
       await redisClient.connect();
       console.log("Connected to Redis successfully");
     } catch (connectError) {
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     // If we have a previous story ID, filter it out to avoid showing the same story
     let filteredStoryKeys = storyKeys;
     if (previousStoryId) {
-      filteredStoryKeys = storyKeys.filter(key => !key.includes(previousStoryId));
+      filteredStoryKeys = storyKeys.filter((key: string) => !key.includes(previousStoryId));
       // If filtering removed all keys, revert to all keys
       if (filteredStoryKeys.length === 0) {
         filteredStoryKeys = storyKeys;
