@@ -776,11 +776,43 @@ async function generateIllustrations(
         ? `The main character's name is ${mainCharacterName}. Other characters that may appear: ${otherCharacterNames.join(', ')}.`
         : `The main character's name is ${mainCharacterName}.`;
       
-      // Create prompt for image generation
-      const promptText = `Create a children's book illustration showing: ${pageText}
+      // Create enhanced prompt for image generation using a structured approach
+      const promptText = `
+⚠️ IMPORTANT - ILLUSTRATION ONLY: DO NOT INCLUDE ANY TEXT IN THE IMAGE ⚠️
+
+CREATE A CHILDREN'S BOOK ILLUSTRATION showing this scene:
+${pageText.replace(/\b[A-Z]{2,}\b/g, word => word.toLowerCase())} 
+
+CHARACTER DETAILS:
 ${characterDescription}
-${storyStyle ? `The illustration style should be ${storyStyle}.` : ''}
-Style: Colorful, whimsical, high-quality children's book illustration, digital art, appealing to children. No text or words in the image.`;
+
+STYLE GUIDANCE:
+${storyStyle ? `Primary style: ${storyStyle}` : 'Primary style: balanced and appealing for children'}
+Age-appropriate visuals for ${storyInput.ageRange || '5-7'} year old audience
+Professional children's book quality, colorful with clear focal points
+${index === 0 ? 'Create an establishing scene that introduces the character and setting' : ''}
+${index === storyPages.length - 1 ? 'Create a satisfying resolution scene with positive emotional tone' : ''}
+
+ARTISTIC DIRECTION:
+- Create a clean, well-composed illustration with attention to lighting and depth
+- Use vibrant, harmonious colors appropriate for children's illustrations
+- Maintain a consistent artistic style across the story pages
+- Focus on expressive character faces and clear storytelling
+- Keep backgrounds detailed but not overwhelming
+- Show objects like books, papers, or signs WITHOUT any visible text on them
+
+⚠️ STRICT REQUIREMENTS - READ CAREFULLY: ⚠️
+1. ABSOLUTELY NO TEXT OR LETTERS of any kind in the image
+2. NO WORDS, WRITING, LETTERS, NUMBERS, OR TYPOGRAPHY anywhere in the illustration
+3. REMOVE ALL TEXT from any objects like books, signs, clothing, etc.
+4. DO NOT render any words from the story text as visual elements
+5. If you need to show reading materials, show BLANK pages or abstract patterns only
+6. ANY signs or displays should be BLANK or show simple abstract symbols only
+
+CREATE AN IMAGE ONLY - This is critical for the book production process.
+
+FINAL INSTRUCTION: This image MUST NOT contain any text, letters, numbers, writing, or readable elements whatsoever.
+`.trim();
 
       sendEvent(controller, 'progress', {
         step: 'illustrating',

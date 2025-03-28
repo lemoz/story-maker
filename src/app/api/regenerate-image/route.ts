@@ -131,14 +131,58 @@ export async function POST(request: Request) {
     // Get the text for the current page
     const pageText = storyData.pages[pageIndex].text;
 
-    // Create prompt for image generation
-    let promptText = `Create a children's book illustration showing: ${pageText}
-      Style: Colorful, whimsical, high-quality children's book illustration, digital art, appealing to children. No text or words in the image.`;
+    // Create enhanced, structured prompt for image regeneration with strong anti-text measures
+    let promptText = `
+⚠️ IMPORTANT - ILLUSTRATION ONLY: DO NOT INCLUDE ANY TEXT IN THE IMAGE ⚠️
+
+CREATE A CHILDREN'S BOOK ILLUSTRATION showing this scene:
+${pageText.replace(/\b[A-Z]{2,}\b/g, word => word.toLowerCase())}
+
+STYLE GUIDANCE:
+Primary style: Professional children's book illustration
+High-quality digital art with clear focal points
+Visually engaging and appropriate for young readers
+
+ARTISTIC DIRECTION:
+- Create a clean, well-composed illustration with attention to lighting and depth
+- Use vibrant, harmonious colors appropriate for children's illustrations
+- Focus on expressive character faces and clear storytelling
+- Keep backgrounds detailed but not overwhelming
+- Maintain visual consistency with the story's established style
+- Show objects like books, papers, or signs WITHOUT any visible text on them
+
+⚠️ STRICT REQUIREMENTS - READ CAREFULLY: ⚠️
+1. ABSOLUTELY NO TEXT OR LETTERS of any kind in the image
+2. NO WORDS, WRITING, LETTERS, NUMBERS, OR TYPOGRAPHY anywhere in the illustration
+3. REMOVE ALL TEXT from any objects like books, signs, clothing, etc.
+4. DO NOT render any words from the story text as visual elements
+5. If you need to show reading materials, show BLANK pages or abstract patterns only
+6. ANY signs or displays should be BLANK or show simple abstract symbols only
+
+CREATE AN IMAGE ONLY - NO TEXT WHATSOEVER - This is critical for the book production process.
+`.trim();
       
-    // Add user comment to the prompt if provided
+    // Add user comment to the prompt if provided, with clear formatting and reinforced no-text warnings
     if (comment && comment.trim()) {
-      promptText += `\n\nSpecial instructions: ${comment.trim()}`;
+      promptText += `
+
+USER SPECIFICATIONS:
+${comment.trim()}
+
+⚠️ CRITICAL REMINDER: Absolutely NO TEXT, letters, words, writing, numbers, or typography should appear anywhere in the illustration. Generate the image only. IMAGE ONLY. EXCLUDE ALL TEXT.
+`;
     }
+    
+    // Add a final reinforcement of the no-text requirement at the end of the prompt
+    promptText += `
+
+FINAL INSTRUCTION: This image MUST NOT contain any text, letters, numbers, writing, or readable elements whatsoever.
+`;
+    
+    // NOTE: For enhanced consistency, we could fetch character photos from the story data
+    // and include them as reference images in the regeneration request, similar to the
+    // original story generation process. This would help maintain character appearance.
+    // TODO: Consider implementing character photo reference in future updates.
 
     console.log(`Generating new image for page ${pageIndex + 1} using Gemini...`);
     
