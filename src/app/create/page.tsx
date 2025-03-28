@@ -178,13 +178,24 @@ export default function CreateStoryPage() {
       });
       
       if (!response.ok) {
-        throw new Error(`Upload failed with status: ${response.status}`);
+        // Get more detailed error information
+        let errorDetails = '';
+        try {
+          const errorData = await response.json();
+          errorDetails = errorData.error || '';
+        } catch {
+          // If we can't parse the response as JSON, just use the status text
+          errorDetails = response.statusText;
+        }
+        
+        throw new Error(`Upload failed with status: ${response.status}${errorDetails ? `, Details: ${errorDetails}` : ''}`);
       }
       
       const data = await response.json();
       return data.url;
     } catch (error) {
       console.error('Error uploading character photo:', error);
+      setError(`Photo upload failed: ${error.message}`);
       return null;
     }
   };
@@ -213,18 +224,38 @@ export default function CreateStoryPage() {
       // Process all uploads in parallel for efficiency
       const uploadPromises = updatedCharacters.map(async (char, index) => {
         if (char.photoFile && !char.uploadedPhotoUrl) {
+          // Show which character photo is being uploaded
+          setGenerationStatus({ 
+            step: "validating",
+            detail: `Uploading photo for ${char.name || 'character'}...`
+          });
+          
           const uploadedUrl = await uploadCharacterPhoto(char.photoFile);
           if (uploadedUrl) {
             updatedCharacters[index] = {
               ...char,
               uploadedPhotoUrl: uploadedUrl
             };
+          } else {
+            // If upload failed and we already set an error in uploadCharacterPhoto
+            // we should stop the story generation
+            throw new Error(`Failed to upload photo for ${char.name || 'character'}`);
           }
         }
       });
       
-      // Wait for all uploads to complete
-      await Promise.all(uploadPromises);
+      try {
+        // Wait for all uploads to complete
+        await Promise.all(uploadPromises);
+      } catch (error) {
+        // We'll catch upload errors here and stop the process
+        console.error('Photo upload failed:', error);
+        setGenerationStatus({ 
+          step: 'error',
+          error: error.message || 'Photo upload failed'
+        });
+        throw error; // Re-throw to stop the story generation process
+      }
       
       // Prepare characters data for API (excluding client-only properties)
       const charactersForAPI = updatedCharacters.map(({ id, name, isMain, uploadedPhotoUrl }) => ({
@@ -410,6 +441,43 @@ export default function CreateStoryPage() {
     
     // Clear previous error
     setError(null);
+    
+    // Basic form validation
+    if (characters.some(char => !char.name.trim())) {
+      setError('All characters must have a name');
+      return;
+    }
+    
+    if (!ageRange) {
+      setError('Please select an age range');
+      return;
+    }
+    
+    if (!storyStyle) {
+      setError('Please select a story style');
+      return;
+    }
+    
+    if (storyPlotOption === 'describe' && !storyDescription.trim()) {
+      setError('Please enter a story description');
+      return;
+    }
+    
+    // Pre-validate all photos to make sure they're valid image files
+    const invalidPhotos = characters.filter(char => 
+      char.photoFile && 
+      (!char.photoFile.type.startsWith('image/') || 
+       char.photoFile.size > 5 * 1024 * 1024) // 5MB limit
+    );
+    
+    if (invalidPhotos.length > 0) {
+      const invalidCharNames = invalidPhotos
+        .map(char => char.name || 'Unnamed character')
+        .join(', ');
+      
+      setError(`Invalid photos detected for: ${invalidCharNames}. Photos must be images under 5MB.`);
+      return;
+    }
     
     // Set loading state and show progress dialog
     setIsLoading(true);
