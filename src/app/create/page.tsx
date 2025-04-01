@@ -641,6 +641,26 @@ export default function CreateStoryPage() {
               // Story generation completed successfully
               setGenerationStatus({ step: 'complete' });
               
+              // Track successful story completion with Meta Pixel
+              if (typeof window !== 'undefined' && window.trackFBEvent) {
+                window.trackFBEvent('Purchase', {
+                  content_name: 'story_created',
+                  content_category: 'story_creation',
+                  content_type: 'product',
+                  content_ids: [eventData.storyId],
+                  contents: [
+                    {
+                      id: 'story_creation',
+                      quantity: 1
+                    }
+                  ],
+                  num_items: 1,
+                  currency: 'USD',
+                  value: 0, // This is a free product, but tracking value as 0
+                });
+                console.log("Meta Pixel: Tracked Purchase event for story completion");
+              }
+              
               // Small delay before redirecting
               setTimeout(() => {
                 router.push(`/story/${eventData.storyId}`);
@@ -724,6 +744,22 @@ export default function CreateStoryPage() {
       
       setError(`Invalid photos detected for: ${invalidCharNames}. Photos must be images under 5MB.`);
       return;
+    }
+    
+    // Track story generation start event with Meta Pixel
+    if (typeof window !== 'undefined' && window.trackFBEvent) {
+      window.trackFBEvent('InitiateCheckout', {
+        content_category: 'story_creation',
+        content_name: 'start_story_generation',
+        num_items: characters.length,
+        contents: [
+          {
+            id: 'story_generation',
+            quantity: 1
+          }
+        ]
+      });
+      console.log("Meta Pixel: Tracked InitiateCheckout event for story generation start");
     }
     
     // Set loading state and show progress dialog

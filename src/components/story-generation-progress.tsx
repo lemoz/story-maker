@@ -81,6 +81,15 @@ export function StoryGenerationProgress({
       onEmailSubmit(email);
     }
     
+    // Track email submission event with Meta Pixel
+    if (typeof window !== 'undefined' && window.trackFBEvent) {
+      window.trackFBEvent('Lead', {
+        content_name: 'story_generation_email',
+        content_category: 'story_creation'
+      });
+      console.log("Meta Pixel: Tracked Lead event for email collection");
+    }
+    
     // Simulate API call for now
     setTimeout(() => {
       setIsSubmitting(false);
@@ -139,6 +148,31 @@ export function StoryGenerationProgress({
     
     return stepIdx < currentIdx;
   }
+  
+  // Debug logs to check if preview URLs are reaching the component
+  console.log("Progress Component Status Prop:", status);
+  if (status.step === 'illustrating' && status.illustrationProgress) {
+    const previewUrl = status.illustrationProgress.previewUrl;
+    console.log("Illustrating - Preview URL Received by Component:", previewUrl);
+    
+    // Check if the URL is a valid data URL
+    if (previewUrl) {
+      if (previewUrl.startsWith('data:image/')) {
+        console.log("Preview URL is a valid data URL");
+        // Optionally check length to see if it's truncated
+        console.log("Preview URL length:", previewUrl.length);
+      } else if (previewUrl.startsWith('http')) {
+        console.log("Preview URL is a valid HTTP URL");
+        // We could add an image loader here to verify the URL works
+        const img = new Image();
+        img.onload = () => console.log("✅ Preview image loaded successfully");
+        img.onerror = (err) => console.error("❌ Preview image failed to load:", err);
+        img.src = previewUrl;
+      } else {
+        console.warn("Preview URL has an unexpected format:", previewUrl.substring(0, 30) + "...");
+      }
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,7 +194,7 @@ export function StoryGenerationProgress({
               <div className="relative">
                 <div className="h-24 w-24 rounded-full flex items-center justify-center bg-white shadow-md border">
                   {status.step === "illustrating" ? (
-                    <div className="h-20 w-20 relative overflow-hidden rounded-md bg-muted">
+                    <div className="h-20 w-20 relative overflow-hidden rounded-full bg-muted">
                       {status.illustrationProgress?.previewUrl ? (
                         // Show the actual generated image when available
                         <div className="w-full h-full relative">
@@ -168,14 +202,21 @@ export function StoryGenerationProgress({
                           <img 
                             src={status.illustrationProgress.previewUrl} 
                             alt={`Illustration ${status.illustrationProgress.current}`}
-                            className="absolute inset-0 w-full h-full object-cover rounded-md"
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error("Error loading image in central circle:", e);
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent"></div>
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent rounded-full border-2 border-primary/20"></div>
+                          <div className="absolute bottom-1 right-1 bg-primary text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center">
+                            {status.illustrationProgress.current}
+                          </div>
                         </div>
                       ) : (
                         // Show placeholder animation when no image is available yet
                         <>
-                          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse"></div>
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse rounded-full"></div>
                           <IllustrationIcon className="h-8 w-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-primary" />
                         </>
                       )}
@@ -216,7 +257,7 @@ export function StoryGenerationProgress({
           
           {/* Illustration progress - only show when relevant */}
           {status.step === "illustrating" && status.illustrationProgress && (
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/10 space-y-2">
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/10 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Illustrations</span>
                 <span className="text-sm font-medium">
@@ -232,9 +273,11 @@ export function StoryGenerationProgress({
                   }}
                 />
               </div>
-              {status.illustrationProgress.detail && (
-                <p className="text-xs text-muted-foreground italic">{status.illustrationProgress.detail}</p>
-              )}
+              
+              {/* Show detail text for illustration progress */}
+              <div className="text-xs text-muted-foreground italic">
+                {status.illustrationProgress.detail || "Generating illustration..."}
+              </div>
             </div>
           )}
           
