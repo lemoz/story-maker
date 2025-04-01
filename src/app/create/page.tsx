@@ -2,30 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
 import {
   Alert,
   AlertDescription,
@@ -35,17 +11,27 @@ import {
   StoryGenerationProgress, 
   type StoryGenerationStatus 
 } from "@/components/story-generation-progress";
-import { Loader2, X, Trash2, Camera, Plus } from "lucide-react";
+import { CharactersSection, type Character } from "@/components/story-form/characters-section";
+import { StoryPlotSection } from "@/components/story-form/story-plot-section";
+import { StoryDetailsSection } from "@/components/story-form/story-details-section";
+import { SubmitButton } from "@/components/story-form/submit-button";
 
-// Character interface
-interface Character {
-  id: string;
-  name: string;
-  isMain: boolean;
-  gender: 'female' | 'male' | 'unspecified';
-  photoFile: File | null;
-  photoPreviewUrl: string | null;
-  uploadedPhotoUrl: string | null;
+// Request body interface
+interface StoryRequestBody {
+  characters: {
+    id: string;
+    name: string;
+    isMain: boolean;
+    gender: 'female' | 'male' | 'unspecified';
+    uploadedPhotoUrl: string | null;
+  }[];
+  storyPlotOption: string;
+  storyDescription: string;
+  ageRange: string;
+  storyStyle: string;
+  storyLengthTargetPages: number;
+  email: string | null;
+  uploadedStoryPhotoUrls?: string[];
 }
 
 export default function CreateStoryPage() {
@@ -53,7 +39,7 @@ export default function CreateStoryPage() {
   // Create refs for file inputs
   const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   // Create a specific ref for the event photos input
-  const eventPhotosInputRef = React.useRef<HTMLInputElement | null>(null);
+  const eventPhotosInputRef = React.useRef<HTMLInputElement>(null);
   
   // State hooks for form values
   const [storyPlotOption, setStoryPlotOption] = useState<string>('photos');
@@ -258,7 +244,7 @@ export default function CreateStoryPage() {
       
       const data = await response.json();
       return data.url;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading character photo:', error);
       setError(`Photo upload failed: ${error.message}`);
       return null;
@@ -359,7 +345,7 @@ export default function CreateStoryPage() {
       // Switch to describe mode to show the generated description
       setStoryPlotOption('describe');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating story idea from photos:', error);
       setError(`Failed to generate story idea: ${error.message}`);
     } finally {
@@ -447,7 +433,7 @@ export default function CreateStoryPage() {
           console.error('Story photo upload failed:', error);
           setGenerationStatus({ 
             step: 'error',
-            error: error.message || 'Story photo upload failed'
+            error: (error as Error).message || 'Story photo upload failed'
           });
           throw error; // Re-throw to stop the story generation process
         }
@@ -461,7 +447,7 @@ export default function CreateStoryPage() {
         console.error('Character photo upload failed:', error);
         setGenerationStatus({ 
           step: 'error',
-          error: error.message || 'Character photo upload failed'
+          error: (error as Error).message || 'Character photo upload failed'
         });
         throw error; // Re-throw to stop the story generation process
       }
@@ -477,7 +463,7 @@ export default function CreateStoryPage() {
       
       // Initialize for Server-Sent Events
       // This will allow the server to send progress updates in real-time
-      const requestBody = {
+      const requestBody: StoryRequestBody = {
         characters: charactersForAPI,
         storyPlotOption,
         storyDescription,
@@ -805,463 +791,43 @@ export default function CreateStoryPage() {
       )}
 
       <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
-        {/* Section 1: Characters */}
-        <Card className="shadow-sm border-primary/10 overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -z-10 opacity-70"></div>
-          <CardHeader className="relative pb-2">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-primary rounded-full"></div>
-              <CardTitle>1. Who is the story about?</CardTitle>
-            </div>
-            <CardDescription className="mt-2">
-              Add characters and upload photos to guide the story illustrations.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {characters.map((character) => (
-              <div key={character.id} 
-                className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-4 p-4 border rounded-lg bg-background/50 hover:bg-background/80 transition-colors shadow-sm"
-              >
-                {/* Photo Upload Area */}
-                <div className="relative h-28 w-28 sm:h-32 sm:w-32 shrink-0">
-                  {/* Hidden file input */}
-                  <input
-                    type="file"
-                    id={`photo-${character.id}`}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      handleCharacterChange(character.id, 'photoFile', file);
-                    }}
-                    ref={(el) => {
-                      fileInputRefs.current[character.id] = el;
-                    }}
-                  />
-                  
-                  {/* Photo preview or placeholder */}
-                  {character.photoPreviewUrl ? (
-                    <div className="relative w-full h-full rounded-xl overflow-hidden shadow-md ring-1 ring-primary/20">
-                      <Image
-                        src={character.photoPreviewUrl}
-                        alt={`${character.name || 'Character'} preview`}
-                        fill
-                        sizes="(max-width: 768px) 112px, 128px"
-                        className="object-cover"
-                      />
-                      {/* Remove photo button */}
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-1 right-1 h-7 w-7 rounded-full"
-                        onClick={() => handleRemovePhoto(character.id)}
-                        aria-label="Remove photo"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-full flex flex-col items-center justify-center gap-2 bg-muted/50 rounded-xl hover:bg-muted/80 hover:border-primary/50 transition-colors shadow-sm"
-                      onClick={() => fileInputRefs.current[character.id]?.click()}
-                    >
-                      <Camera className="h-6 w-6 text-primary" />
-                      <span className="text-xs">Upload Photo</span>
-                    </Button>
-                  )}
-                </div>
-                
-                <div className="flex-grow space-y-3 w-full sm:w-auto">
-                  <Label htmlFor={`char-name-${character.id}`} className="text-sm font-medium">
-                    Character Name
-                  </Label>
-                  <Input
-                    id={`char-name-${character.id}`}
-                    placeholder="Enter name"
-                    value={character.name}
-                    onChange={(e) => handleCharacterChange(character.id, 'name', e.target.value)}
-                    className="border-primary/20 focus:border-primary/60"
-                  />
-                  
-                  <div className="mt-3">
-                    <Label className="text-sm font-medium mb-2 block">
-                      Gender
-                    </Label>
-                    <RadioGroup 
-                      value={character.gender}
-                      onValueChange={(value) => handleCharacterChange(character.id, 'gender', value)}
-                      className="flex flex-wrap gap-4 mt-1"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="female" id={`gender-female-${character.id}`} />
-                        <Label htmlFor={`gender-female-${character.id}`} className="cursor-pointer">Female</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="male" id={`gender-male-${character.id}`} />
-                        <Label htmlFor={`gender-male-${character.id}`} className="cursor-pointer">Male</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="unspecified" id={`gender-unspecified-${character.id}`} />
-                        <Label htmlFor={`gender-unspecified-${character.id}`} className="cursor-pointer">Unspecified</Label>
-                      </div>
-                    </RadioGroup>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Character gender helps the AI create more accurate illustrations and stories
-                    </p>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    {/* Main character indicator */}
-                    {character.isMain && (
-                      <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-1 rounded-full">
-                        Main Character
-                      </span>
-                    )}
-                    {/* Photo status indicator */}
-                    {character.uploadedPhotoUrl && (
-                      <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full flex items-center gap-1">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Photo uploaded
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Remove character button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors rounded-full h-8 w-8 self-start mt-0 sm:mt-2"
-                  onClick={() => handleRemoveCharacter(character.id)}
-                  aria-label="Remove Character"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-            <Button 
-              type="button" 
-              variant="outline" 
-              className="w-full group border-dashed border-primary/30 hover:border-primary hover:bg-primary/5"
-              onClick={handleAddCharacter}
-            >
-              <Plus className="mr-1 h-4 w-4 group-hover:scale-110 transition-transform" /> 
-              Add Another Character
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Characters Section */}
+        <CharactersSection
+          characters={characters}
+          onAddCharacter={handleAddCharacter}
+          onRemoveCharacter={handleRemoveCharacter}
+          onCharacterChange={handleCharacterChange}
+          onRemovePhoto={handleRemovePhoto}
+          fileInputRefs={fileInputRefs}
+        />
 
-        {/* Section 2: Story Plot/Scenes */}
-        <Card className="shadow-sm border-primary/10 overflow-hidden">
-          <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-br-full -z-10 opacity-70"></div>
-          <CardHeader className="relative pb-2">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-primary rounded-full"></div>
-              <CardTitle>2. What happens in the story?</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <RadioGroup 
-              value={storyPlotOption} 
-              onValueChange={setStoryPlotOption}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-            >
-              <div className={`border p-4 rounded-xl transition-all shadow-sm
-                ${storyPlotOption === 'photos' 
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary/40' 
-                  : 'hover:border-primary/30 hover:bg-primary/3'}`}
-              >
-                <Label 
-                  htmlFor="option-photos" 
-                  className="flex items-center space-x-3 cursor-pointer w-full"
-                >
-                  <RadioGroupItem 
-                    value="photos" 
-                    id="option-photos" 
-                    className="h-4 w-4 text-primary border-primary/40" 
-                  />
-                  <div className="flex-1">
-                    <span className={`block mb-1 font-medium ${storyPlotOption === 'photos' ? 'text-primary' : ''}`}>
-                      Upload Photos from the Day/Event
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      AI will generate a story based on your uploaded photos
-                    </p>
-                  </div>
-                </Label>
-              </div>
-              
-              <div className={`border p-4 rounded-xl transition-all shadow-sm
-                ${storyPlotOption === 'describe' 
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary/40' 
-                  : 'hover:border-primary/30 hover:bg-primary/3'}`}
-              >
-                <Label 
-                  htmlFor="option-describe" 
-                  className="flex items-center space-x-3 cursor-pointer w-full"
-                >
-                  <RadioGroupItem 
-                    value="describe" 
-                    id="option-describe" 
-                    className="h-4 w-4 text-primary border-primary/40"
-                  />
-                  <div className="flex-1">
-                    <span className={`block mb-1 font-medium ${storyPlotOption === 'describe' ? 'text-primary' : ''}`}>
-                      Describe the Story Idea
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      Write a brief description and we'll create a story from it
-                    </p>
-                  </div>
-                </Label>
-              </div>
-            </RadioGroup>
+        {/* Story Plot Section */}
+        <StoryPlotSection
+          storyPlotOption={storyPlotOption}
+          onPlotOptionChange={setStoryPlotOption}
+          storyDescription={storyDescription}
+          onDescriptionChange={setStoryDescription}
+          eventPhotos={eventPhotos}
+          eventPhotosPreviews={eventPhotosPreviews}
+          onEventPhotosUpload={handleEventPhotosUpload}
+          onRemoveEventPhoto={handleRemoveEventPhoto}
+          onSuggestStoryIdea={suggestStoryIdeaFromPhotos}
+          isGeneratingIdea={isGeneratingIdea}
+          eventPhotosInputRef={eventPhotosInputRef}
+        />
 
-            <div className="mt-6 space-y-4">
-              {/* Photo upload area - conditionally rendered */}
-              {storyPlotOption === 'photos' && (
-                <div className="bg-background/70 p-4 rounded-lg border border-muted animate-in fade-in-50 duration-300">
-                  {/* Hidden file input */}
-                  <input 
-                    type="file" 
-                    id="event-photos" 
-                    className="hidden" 
-                    accept="image/*" 
-                    multiple 
-                    onChange={handleEventPhotosUpload}
-                    ref={eventPhotosInputRef}
-                  />
-                  
-                  {/* Dropzone/upload button */}
-                  <div 
-                    className="border border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors bg-muted/30"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      eventPhotosInputRef.current?.click();
-                    }}
-                  >
-                    {eventPhotos.length === 0 ? (
-                      <button 
-                        type="button"
-                        className="h-36 sm:h-40 w-full flex flex-col items-center justify-center text-muted-foreground p-4 bg-transparent border-0"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          eventPhotosInputRef.current?.click();
-                        }}
-                      >
-                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-3">
-                          <Camera className="h-7 w-7 text-primary" />
-                        </div>
-                        <p className="text-sm sm:text-base text-center font-medium">
-                          Click to upload photos from the day or event
-                        </p>
-                        <p className="text-xs text-center mt-1 max-w-xs mx-auto text-muted-foreground">
-                          Supported formats: JPG, PNG, GIF (max 5MB each)
-                        </p>
-                      </button>
-                    ) : (
-                      <div className="p-5">
-                        <div className="flex flex-wrap gap-4 mb-3 justify-center sm:justify-start">
-                          {eventPhotosPreviews.map((previewUrl, index) => (
-                            <div key={index} className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden group shadow-sm">
-                              <Image
-                                src={previewUrl}
-                                alt={`Event photo ${index + 1}`}
-                                fill
-                                sizes="(max-width: 768px) 96px, 112px"
-                                className="object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                              <button
-                                type="button"
-                                className="absolute top-1 right-1 p-1.5 bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveEventPhoto(index);
-                                }}
-                                aria-label="Remove photo"
-                              >
-                                <X className="h-3 w-3 text-white" />
-                              </button>
-                            </div>
-                          ))}
-                          <button 
-                            type="button"
-                            className="w-24 h-24 sm:w-28 sm:h-28 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground bg-muted/40 hover:bg-muted/60 transition-colors"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              eventPhotosInputRef.current?.click();
-                            }}
-                          >
-                            <Plus className="h-6 w-6 mb-1" />
-                            <span className="text-xs">Add more</span>
-                          </button>
-                        </div>
-                        <p className="text-xs text-muted-foreground text-center sm:text-left">
-                          {eventPhotos.length} photo{eventPhotos.length !== 1 ? 's' : ''} selected
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {eventPhotos.length > 0 && (
-                    <div className="flex justify-center mt-4">
-                      <Button 
-                        type="button" 
-                        variant="secondary" 
-                        onClick={suggestStoryIdeaFromPhotos}
-                        disabled={isGeneratingIdea}
-                        className="relative bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/30 shadow-sm"
-                      >
-                        {isGeneratingIdea ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Generating idea...
-                          </>
-                        ) : (
-                          <>
-                            <span className="mr-2">✨</span>
-                            Suggest Story Idea from Photos
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Text area for describing story - conditionally rendered */}
-              {storyPlotOption === 'describe' && (
-                <div className="bg-background/70 p-4 rounded-lg border border-muted animate-in fade-in-50 duration-300">
-                  <Label htmlFor="story-description" className="block mb-2 text-sm font-medium">
-                    Enter your story idea
-                  </Label>
-                  <Textarea 
-                    id="story-description"
-                    placeholder="Write your story idea here... (For example: A magical adventure where Sam discovers a hidden forest with talking animals, and learns about friendship and bravery.)" 
-                    className="min-h-36 border-primary/20 focus:border-primary/60"
-                    value={storyDescription}
-                    onChange={(e) => setStoryDescription(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Be as detailed as you like. Include characters, locations, and key story moments.
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Story Details */}
-        <Card className="shadow-sm border-primary/10 overflow-hidden">
-          <div className="absolute bottom-0 right-0 w-40 h-40 bg-primary/5 rounded-tl-full -z-10 opacity-50"></div>
-          <CardHeader className="relative pb-2">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-primary rounded-full"></div>
-              <CardTitle>3. Story Details</CardTitle>
-            </div>
-            <CardDescription className="mt-2">
-              Customize your story's audience and style.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="age-range" className="text-sm font-medium">Child's Age Range</Label>
-                <Select 
-                  value={ageRange} 
-                  onValueChange={setAgeRange}
-                >
-                  <SelectTrigger id="age-range" className="border-primary/20 focus:border-primary/60 shadow-sm">
-                    <SelectValue placeholder="Select age range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3-4">3-4 years</SelectItem>
-                    <SelectItem value="5-7">5-7 years</SelectItem>
-                    <SelectItem value="8+">8+ years</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  We'll adjust vocabulary and themes to suit this age group
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="style" className="text-sm font-medium">Story Style/Tone</Label>
-                <Select 
-                  value={storyStyle} 
-                  onValueChange={setStoryStyle}
-                >
-                  <SelectTrigger id="style" className="border-primary/20 focus:border-primary/60 shadow-sm">
-                    <SelectValue placeholder="Select style" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="whimsical">Whimsical</SelectItem>
-                    <SelectItem value="adventurous">Adventurous</SelectItem>
-                    <SelectItem value="funny">Funny</SelectItem>
-                    <SelectItem value="educational">Educational</SelectItem>
-                    <SelectItem value="magical">Magical</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sets the overall tone and mood of your story
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between items-center mb-1">
-                <Label htmlFor="story-length-slider" className="text-sm font-medium">Approximate Story Length</Label>
-                {/* Display current value */}
-                <span className="text-sm font-medium text-primary w-14 text-right tabular-nums">{storyLengthTargetPages} pages</span>
-              </div>
-              <Slider
-                id="story-length-slider"
-                min={3} // Min pages
-                max={10} // Max pages
-                step={1}
-                value={[storyLengthTargetPages]} // Slider value is an array
-                onValueChange={(newValueArray) => setStoryLengthTargetPages(newValueArray[0])} // Update state with the first value
-                className="py-2" // Add vertical padding for better thumb interaction
-              />
-              <p className="text-xs text-muted-foreground pt-1">Adjust the slider to set the desired story length (3-10 pages).</p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Story Details Section */}
+        <StoryDetailsSection
+          ageRange={ageRange}
+          onAgeRangeChange={setAgeRange}
+          storyStyle={storyStyle}
+          onStoryStyleChange={setStoryStyle}
+          storyLengthTargetPages={storyLengthTargetPages}
+          onStoryLengthChange={setStoryLengthTargetPages}
+        />
 
         {/* Submit Button */}
-        <div className="pt-4 sm:pt-6">
-          <Button 
-            type="submit" 
-            size="lg" 
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors py-6 rounded-xl shadow-md relative overflow-hidden group"
-            disabled={isLoading}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary-foreground/10 to-transparent opacity-0 group-hover:opacity-20 transition-opacity"></div>
-            {isLoading ? (
-              <div className="flex items-center justify-center">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                <span className="text-base">Creating Your Story...</span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center">
-                <span className="text-lg font-medium">Create My Story</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-2">
-                  <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-            )}
-          </Button>
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            Your personalized story will be generated in just a few moments.
-          </p>
-        </div>
+        <SubmitButton isLoading={isLoading} />
       </form>
     </div>
   );
