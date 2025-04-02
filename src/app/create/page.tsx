@@ -892,8 +892,7 @@ export default function CreateStoryPage() {
         )}
 
         <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
-          <div className="w-[100vw] sm:w-[85vw] md:w-[70vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
-            {/* Adiciona um gradiente sutil no background */}
+          <div className="w-[100vw] sm:w-[85vw] md:w-[85vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
             <Stepper
@@ -914,6 +913,10 @@ export default function CreateStoryPage() {
                 onRemoveCharacter={handleRemoveCharacter}
                 onCharacterChange={handleCharacterChange}
                 onRemovePhoto={handleRemovePhoto}
+                handleRemoveCharacter={handleRemoveCharacter}
+                handleEditCharacter={(id: string) =>
+                  console.log("edit character")
+                }
               />
             )}
 

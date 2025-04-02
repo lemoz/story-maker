@@ -22,6 +22,8 @@ interface CharactersSectionProps {
   onRemoveCharacter: (id: string) => void;
   onCharacterChange: (id: string, field: keyof Character, value: any) => void;
   onRemovePhoto: (id: string) => void;
+  handleRemoveCharacter: (id: string) => void;
+  handleEditCharacter: (id: string) => void;
 }
 
 enum CharacterState {
@@ -30,31 +32,71 @@ enum CharacterState {
   CharactersManagement = "CHARACTERS_MANAGEMENT",
 }
 
+const FixedButton = ({
+  onClick,
+  state,
+  isValid = true,
+}: {
+  onClick: () => void;
+  state: CharacterState;
+  isValid?: boolean;
+}) => {
+  const getButtonConfig = () => {
+    switch (state) {
+      case CharacterState.CharacterCreation:
+        return {
+          text: "Add Character",
+          icon: <Plus className="h-5 w-5" />,
+        };
+      case CharacterState.CharactersManagement:
+        return {
+          text: "Next",
+          icon: null,
+        };
+      default:
+        return;
+    }
+  };
+
+  const config = getButtonConfig();
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+      <Button
+        type="button"
+        onClick={onClick}
+        disabled={!isValid}
+        className="w-full bg-[#9B87F5] hover:bg-[#7E69AB] text-white rounded-full py-6 flex items-center justify-center gap-2 transition-colors shadow-lg"
+      >
+        {config?.icon}
+        {config?.text}
+      </Button>
+    </div>
+  );
+};
+
 export function CharactersSection({
   characters,
   onAddCharacter,
   onRemoveCharacter,
   onCharacterChange,
   onRemovePhoto,
+  handleRemoveCharacter,
+  handleEditCharacter,
 }: CharactersSectionProps) {
   const [state, setState] = useState(CharacterState.Initial);
   const [character, setCharacter] = useState<Character | null>(null);
-  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  // Observa mudanças no array de characters
+  React.useEffect(() => {
+    if (state === CharacterState.CharacterCreation && characters.length > 0) {
+      setCharacter(characters[characters.length - 1]);
+    }
+  }, [characters, state]);
 
   const handleGoToCharacterCreation = () => {
-    const newCharacter: Character = {
-      id: crypto.randomUUID(),
-      name: "",
-      isMain: false,
-      gender: "unspecified" as "female" | "male" | "unspecified",
-      photoFile: null,
-      photoPreviewUrl: null,
-      uploadedPhotoUrl: null,
-    };
-
-    setCharacter(newCharacter);
     setState(CharacterState.CharacterCreation);
-    onAddCharacter(); // Adiciona o personagem à lista global
+    onAddCharacter();
   };
 
   const handleCharacterChange = (
@@ -62,16 +104,41 @@ export function CharactersSection({
     field: keyof Character,
     value: any
   ) => {
+    onCharacterChange(id, field, value);
     setCharacter((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, [field]: value };
-      onCharacterChange(id, field, value); // Atualiza o estado global
-      return updated;
+      return { ...prev, [field]: value };
     });
   };
 
+  const handleFixedButtonClick = () => {
+    switch (state) {
+      case CharacterState.CharacterCreation:
+        if (character?.name && character?.gender) {
+          setState(CharacterState.CharactersManagement);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const isCharacterValid = () => {
+    if (state === CharacterState.CharacterCreation && character) {
+      return !!character.name;
+    }
+    return true;
+  };
+
+  const handleCancel = () => {
+    if (character?.id) {
+      onRemoveCharacter(character.id);
+    }
+    setState(CharacterState.Initial);
+  };
+
   return (
-    <div className="min-h-[300px] w-full flex flex-col items-center justify-start">
+    <div className="min-h-[300px] w-full flex flex-col items-center justify-start pb-24">
       {state === CharacterState.Initial && (
         <InitialCharacterContainer
           onAddCharacter={handleGoToCharacterCreation}
@@ -79,9 +146,25 @@ export function CharactersSection({
       )}
       {state === CharacterState.CharacterCreation && character && (
         <CharacterCreationContainer
-          onAddCharacter={onAddCharacter}
           character={character}
           onCharacterChange={handleCharacterChange}
+          onCancel={handleCancel}
+        />
+      )}
+      {state === CharacterState.CharactersManagement && (
+        <CharactersManagementContainer
+          characters={characters}
+          onAddCharacter={handleGoToCharacterCreation}
+          onEditCharacter={handleEditCharacter}
+          onDeleteCharacter={handleRemoveCharacter}
+        />
+      )}
+      {(state === CharacterState.CharactersManagement ||
+        state === CharacterState.CharacterCreation) && (
+        <FixedButton
+          onClick={handleFixedButtonClick}
+          state={state}
+          isValid={isCharacterValid()}
         />
       )}
     </div>
@@ -132,13 +215,13 @@ const InitialCharacterContainer = ({
 };
 
 const CharacterCreationContainer = ({
-  onAddCharacter,
   character,
   onCharacterChange,
+  onCancel,
 }: {
-  onAddCharacter: () => void;
   character: Character;
   onCharacterChange: (id: string, field: keyof Character, value: any) => void;
+  onCancel: () => void;
 }) => {
   const handleUploadAvatar = () => {
     const input = document.createElement("input");
@@ -162,7 +245,7 @@ const CharacterCreationContainer = ({
     input.click();
   };
   return (
-    <div className="w-full h-full rounded-2xl bg-white shadow-md p-8">
+    <div className="w-full h-full rounded-2xl bg-white shadow-md p-4">
       <div className="flex flex-col gap-6 w-full">
         <h3 className="text-xl font-semibold text-foreground">
           Add a New Character
@@ -298,10 +381,112 @@ const CharacterCreationContainer = ({
           className="w-fit"
           type="button"
           variant="outline"
-          onClick={() => onAddCharacter()}
+          onClick={onCancel}
         >
           Cancel
         </Button>
+      </div>
+    </div>
+  );
+};
+
+const CharactersManagementContainer = ({
+  characters,
+  onAddCharacter,
+  onEditCharacter,
+  onDeleteCharacter,
+}: {
+  characters: Character[];
+  onAddCharacter: () => void;
+  onEditCharacter: (id: string) => void;
+  onDeleteCharacter: (id: string) => void;
+}) => {
+  const handleEditCharacter = (id: string) => {
+    onEditCharacter(id);
+  };
+
+  const handleDeleteCharacter = (id: string) => {
+    onDeleteCharacter(id);
+  };
+  return (
+    <div className="w-full rounded-2xl bg-white">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-semibold text-foreground">
+          Your Characters
+        </h3>
+        <Button
+          onClick={onAddCharacter}
+          className="bg-[#9B87F5] hover:bg-[#7E69AB] text-white rounded-lg px-4 py-2 flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Add Character
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        {characters.map((character) => (
+          <CharacterCard
+            key={character.id}
+            character={character}
+            onEditCharacter={handleEditCharacter}
+            onDeleteCharacter={handleDeleteCharacter}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const getInitialLetter = (name: string): string => {
+  return name ? name.charAt(0).toUpperCase() : "A";
+};
+
+const CharacterCard = ({
+  character,
+  onEditCharacter,
+  onDeleteCharacter,
+}: {
+  character: Character;
+  onEditCharacter: (id: string) => void;
+  onDeleteCharacter: (id: string) => void;
+}) => {
+  return (
+    <div className="w-full max-w-xs max-h-xs bg-white shadow-md rounded-2xl border border-gray-100 p-6">
+      <div className="flex flex-col items-center gap-4">
+        {character.photoPreviewUrl ? (
+          <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-[#9B87F5]">
+            <img
+              src={character.photoPreviewUrl}
+              alt={character.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="w-24 h-24 rounded-full bg-[#EEE9FE] border-2 border-[#9B87F5] flex items-center justify-center">
+            <span className="text-2xl font-semibold text-[#9B87F5]">
+              {getInitialLetter(character.name)}
+            </span>
+          </div>
+        )}
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold mb-1">{character.name}</h3>
+          <p className="text-gray-500 text-center">{character.gender}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="text-[#9B87F5] border-[#9B87F5] hover:bg-[#EEE9FE]"
+            onClick={() => onEditCharacter(character.id)}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            className="text-red-500 border-red-200 hover:bg-red-50"
+            onClick={() => onDeleteCharacter(character.id)}
+          >
+            Delete
+          </Button>
+        </div>
       </div>
     </div>
   );
