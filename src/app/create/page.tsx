@@ -924,7 +924,6 @@ export default function CreateStoryPage() {
                 onRemoveCharacter={handleRemoveCharacter}
                 onCharacterChange={handleCharacterChange}
                 onRemovePhoto={handleRemovePhoto}
-                fileInputRefs={fileInputRefs}
               />
             )}
 
