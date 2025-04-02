@@ -53,10 +53,10 @@ export function Stepper({
 
         {/* Step Title and Description */}
         <div className="mt-6 mb-2">
-          <h2 className="text-4xl font-bold text-center">
+          <h2 className="text-2xl sm:text-4xl md:text-4xl font-bold text-center">
             {steps[currentStep].title}
           </h2>
-          <p className="text-muted-foreground text-center mt-2">
+          <p className="text-muted-foreground text-sm sm:text-md text-center mt-2">
             {steps[currentStep].description}
           </p>
         </div>

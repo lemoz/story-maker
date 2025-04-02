@@ -874,8 +874,8 @@ export default function CreateStoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/[0.02] via-background to-background">
-      <div className="container mx-auto w-fit max-w-[1200px] h-screen py-6 sm:py-10 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#F6F8FF] to-white">
+      <div className="container mx-auto h-screen sm:py-10 px-4 flex flex-row items-start justify-center">
         {/* Story Generation Progress Dialog */}
         <StoryGenerationProgress
           open={showProgress}
@@ -902,7 +902,7 @@ export default function CreateStoryPage() {
         )}
 
         <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
-          <div className="w-[40vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-md relative overflow-hidden">
+          <div className="w-[100vw] sm:w-[85vw] md:w-[70vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
             {/* Adiciona um gradiente sutil no background */}
             <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
