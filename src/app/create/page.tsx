@@ -65,17 +65,7 @@ export default function CreateStoryPage() {
   const [storyStyle, setStoryStyle] = useState<string>("");
   const [storyLengthTargetPages, setStoryLengthTargetPages] =
     useState<number>(6); // Default ~6 pages
-  const [characters, setCharacters] = useState<Character[]>([
-    {
-      id: crypto.randomUUID(),
-      name: "",
-      isMain: true,
-      gender: "unspecified",
-      photoFile: null,
-      photoPreviewUrl: null,
-      uploadedPhotoUrl: null,
-    },
-  ]);
+  const [characters, setCharacters] = useState<Character[]>([]);
   const [storyDescription, setStoryDescription] = useState<string>("");
   const [eventPhotos, setEventPhotos] = useState<File[]>([]); // State for event photos
   const [eventPhotosPreviews, setEventPhotosPreviews] = useState<string[]>([]); // State for preview URLs
