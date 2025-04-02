@@ -38,15 +38,8 @@ export function StoryPlotSection({
   eventPhotosInputRef,
 }: StoryPlotSectionProps) {
   return (
-    <Card className="shadow-sm border-primary/10 overflow-hidden">
-      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-br-full -z-10 opacity-70"></div>
-      <CardHeader className="relative pb-2">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-primary rounded-full"></div>
-          <CardTitle>2. What happens in the story?</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Card className="shadow-sm border-primary/10">
+      <CardContent className="space-y-6 pt-6">
         <RadioGroup 
           value={storyPlotOption} 
           onValueChange={onPlotOptionChange}

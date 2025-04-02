@@ -28,18 +28,8 @@ export function StoryDetailsSection({
   onStoryLengthChange,
 }: StoryDetailsSectionProps) {
   return (
-    <Card className="shadow-sm border-primary/10 overflow-hidden">
-      <div className="absolute bottom-0 right-0 w-40 h-40 bg-primary/5 rounded-tl-full -z-10 opacity-50"></div>
-      <CardHeader className="relative pb-2">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-primary rounded-full"></div>
-          <CardTitle>3. Story Details</CardTitle>
-        </div>
-        <CardDescription className="mt-2">
-          Customize your story's audience and style.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Card className="shadow-sm border-primary/10">
+      <CardContent className="space-y-6 pt-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label htmlFor="age-range" className="text-sm font-medium">Child's Age Range</Label>
