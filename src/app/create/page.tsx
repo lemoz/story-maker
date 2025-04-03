@@ -71,11 +71,25 @@ export default function CreateStoryPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGeneratingIdea, setIsGeneratingIdea] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isErrorVisible, setIsErrorVisible] = useState<boolean>(false);
   const [showProgress, setShowProgress] = useState<boolean>(false);
   const [generationStatus, setGenerationStatus] =
     useState<StoryGenerationStatus>({
       step: "validating",
     });
+
+  // Add auto-dismiss for error alert with animation
+  useEffect(() => {
+    if (error) {
+      setIsErrorVisible(true);
+      const dismissTimer = setTimeout(() => {
+        setIsErrorVisible(false);
+        setTimeout(() => setError(null), 300); // Remove from DOM after animation
+      }, 2700); // Start hiding slightly before 5s
+
+      return () => clearTimeout(dismissTimer);
+    }
+  }, [error]);
 
   // Add current step state
   const [currentStep, setCurrentStep] = useState(0);
@@ -896,7 +910,11 @@ export default function CreateStoryPage() {
 
         <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
           {error && (
-            <div className="fixed top-4 left-1/2 sm:left-8 -translate-x-1/2 sm:-translate-x-0 z-50 w-full max-w-md animate-in fade-in slide-in-from-top-4">
+            <div
+              className={`fixed top-4 left-1/2 sm:left-8 -translate-x-1/2 sm:-translate-x-0 z-50 w-full max-w-md transition-opacity duration-300 ${
+                isErrorVisible ? "opacity-100" : "opacity-0"
+              }`}
+            >
               <Alert variant="destructive" className="border-red-200 shadow-lg">
                 <AlertTitle className="text-red-600">Error</AlertTitle>
                 <AlertDescription className="text-red-600/90">
