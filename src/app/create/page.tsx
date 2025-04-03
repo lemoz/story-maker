@@ -107,10 +107,10 @@ export default function CreateStoryPage() {
         characters
       )}`,
     },
-    {
-      title: "Customize Your Story",
-      description: "Choose the age range, style, and length of your story.",
-    },
+    // {
+    //   title: "Customize Your Story",
+    //   description: "Choose the age range, style, and length of your story.",
+    // },
   ];
 
   // Cleanup object URLs to prevent memory leaks
@@ -198,6 +198,7 @@ export default function CreateStoryPage() {
   };
 
   const handleRemoveCharacter = (id: string) => {
+    console.log(id);
     // Find the character that's being removed
     const character = characters.find((char) => char.id === id);
 
@@ -208,6 +209,7 @@ export default function CreateStoryPage() {
 
     // Remove the character from state
     setCharacters((prev) => prev.filter((char) => char.id !== id));
+    console.log(characters);
 
     // Clean up file input refs
     if (fileInputRefs.current[id]) {
@@ -941,7 +943,6 @@ export default function CreateStoryPage() {
               <CharactersSection
                 characters={characters}
                 onAddCharacter={handleAddCharacter}
-                onRemoveCharacter={handleRemoveCharacter}
                 onCharacterChange={handleCharacterChange}
                 onRemovePhoto={handleRemovePhoto}
                 handleRemoveCharacter={handleRemoveCharacter}
