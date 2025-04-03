@@ -10,24 +10,9 @@ interface Step {
 interface StepperProps {
   steps: Step[];
   currentStep: number;
-  onNext: () => void;
-  onBack: () => void;
-  isNextDisabled?: boolean;
-  isBackDisabled?: boolean;
-  showSubmit?: boolean;
-  isSubmitLoading?: boolean;
 }
 
-export function Stepper({
-  steps,
-  currentStep,
-  onNext,
-  onBack,
-  isNextDisabled = false,
-  isBackDisabled = false,
-  showSubmit = false,
-  isSubmitLoading = false,
-}: StepperProps) {
+export function Stepper({ steps, currentStep }: StepperProps) {
   const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (

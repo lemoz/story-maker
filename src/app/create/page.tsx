@@ -926,15 +926,7 @@ export default function CreateStoryPage() {
           <div className="w-[100vw] sm:w-[85vw] md:w-[85vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
-            <Stepper
-              steps={FORM_STEPS}
-              currentStep={currentStep}
-              onNext={handleNext}
-              onBack={handleBack}
-              isNextDisabled={!isCurrentStepValid()}
-              showSubmit={currentStep === FORM_STEPS.length - 1}
-              isSubmitLoading={isLoading}
-            />
+            <Stepper steps={FORM_STEPS} currentStep={currentStep} />
 
             {/* Step content */}
             {currentStep === 0 && (
