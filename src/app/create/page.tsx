@@ -894,17 +894,17 @@ export default function CreateStoryPage() {
           onEmailSubmit={handleEmailSubmit}
         />
 
-        {error && (
-          <Alert
-            variant="destructive"
-            className="mb-6 border border-destructive/20 animate-in fade-in duration-300"
-          >
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
         <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
+          {error && (
+            <div className="fixed top-4 left-1/2 sm:left-8 -translate-x-1/2 sm:-translate-x-0 z-50 w-full max-w-md animate-in fade-in slide-in-from-top-4">
+              <Alert variant="destructive" className="border-red-200 shadow-lg">
+                <AlertTitle className="text-red-600">Error</AlertTitle>
+                <AlertDescription className="text-red-600/90">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
           <div className="w-[100vw] sm:w-[85vw] md:w-[85vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
@@ -945,6 +945,7 @@ export default function CreateStoryPage() {
                 isGeneratingIdea={isGeneratingIdea}
                 eventPhotosInputRef={eventPhotosInputRef}
                 onBack={handleBack}
+                onSubmit={handleSubmit}
               />
             )}
 

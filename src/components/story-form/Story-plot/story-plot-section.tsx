@@ -21,6 +21,7 @@ interface StoryPlotSectionProps {
   isGeneratingIdea: boolean;
   eventPhotosInputRef: React.RefObject<HTMLInputElement | null>;
   onBack: () => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 export function StoryPlotSection({
@@ -36,6 +37,7 @@ export function StoryPlotSection({
   isGeneratingIdea,
   eventPhotosInputRef,
   onBack,
+  onSubmit,
 }: StoryPlotSectionProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -54,6 +56,10 @@ export function StoryPlotSection({
 
   const isStoryDescriptionValid = () => {
     return storyDescription.length > 0 || eventPhotos.length > 0;
+  };
+
+  const handleSubmit = () => {
+    onSubmit(new Event("submit") as any);
   };
 
   return (
@@ -114,7 +120,7 @@ export function StoryPlotSection({
 
         <FixedButton
           state={StoryState.StoryDescription}
-          onClick={onSuggestStoryIdea}
+          onClick={handleSubmit}
           isValid={isStoryDescriptionValid()}
         />
       </CardContent>
