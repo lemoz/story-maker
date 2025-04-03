@@ -38,7 +38,7 @@ export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
       <div className="relative group">
         <button
           onClick={() => scroll("left")}
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm group-hover:opacity-100 transition-opacity disabled:opacity-0"
           aria-label="Previous stories"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -66,7 +66,7 @@ export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
 
         <button
           onClick={() => scroll("right")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm group-hover:opacity-100 transition-opacity disabled:opacity-0"
           aria-label="Next stories"
         >
           <ChevronRight className="h-4 w-4" />

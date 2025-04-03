@@ -65,7 +65,7 @@ export const PlotOptionCard = ({
         <div className="mt-2 w-full flex justify-center">
           {!isSelected ? (
             <div
-              className={`w-20 h-20 ${
+              className={`hidden sm:flex w-20 h-20 ${
                 value === "photos" ? "bg-blue-50" : "bg-yellow-50"
               } rounded-2xl flex items-center justify-center`}
             >
