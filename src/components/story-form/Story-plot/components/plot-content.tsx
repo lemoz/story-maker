@@ -188,13 +188,13 @@ const PhotoPreview = ({ previewUrl, index, onRemove }: PhotoPreviewProps) => (
 
 const AddMoreButton = ({ onClick }: { onClick: () => void }) => (
   <button
+    className="w-24 h-24 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-400 hover:border-[#9B87F5] transition-colors"
     type="button"
     onClick={(e) => {
       e.preventDefault();
       e.stopPropagation();
       onClick();
     }}
-    className="w-24 h-24 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-400 hover:border-[#9B87F5] transition-colors"
   >
     <Plus className="h-6 w-6 text-gray-400" />
   </button>

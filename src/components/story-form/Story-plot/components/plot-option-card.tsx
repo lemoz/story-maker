@@ -44,7 +44,7 @@ export const PlotOptionCard = ({
       className={`relative rounded-3xl p-6 text-left transition-all duration-300 transform ${
         isSelected
           ? "ring-4 ring-[#9B87F5] bg-white shadow-lg scale-[1.03] -translate-y-1"
-          : "bg-gray-50 ring-1 ring-gray-200 hover:bg-white hover:shadow-md hover:scale-[1.0] hover:-translate-y-0.5"
+          : "ring-1 ring-gray-200 bg-white hover:ring-[#9B87F5] hover:shadow-md hover:scale-[1.0] hover:-translate-y-0.5"
       }`}
     >
       <Label

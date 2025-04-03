@@ -438,6 +438,7 @@ const CharactersManagementContainer = ({
           Your Characters
         </h3>
         <Button
+          type="button"
           onClick={onAddCharacter}
           className="bg-[#9B87F5] hover:bg-[#7E69AB] text-white rounded-lg px-4 py-2 flex items-center gap-2"
         >
@@ -445,7 +446,7 @@ const CharactersManagementContainer = ({
           Add Character
         </Button>
       </div>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap justify-center sm:justify-start gap-4">
         {characters.map((character) => (
           <CharacterCard
             key={character.id}
@@ -496,6 +497,7 @@ const CharacterCard = ({
         </div>
         <div className="flex gap-2">
           <Button
+            type="button"
             variant="outline"
             className="text-[#9B87F5] border-[#9B87F5] hover:bg-[#EEE9FE]"
             onClick={() => onEditCharacter(character.id)}
@@ -503,6 +505,7 @@ const CharacterCard = ({
             Edit
           </Button>
           <Button
+            type="button"
             variant="outline"
             className="text-red-500 border-red-200 hover:bg-red-50"
             onClick={() => onDeleteCharacter(character.id)}
