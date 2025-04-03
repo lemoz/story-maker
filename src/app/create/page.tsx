@@ -198,7 +198,6 @@ export default function CreateStoryPage() {
   };
 
   const handleRemoveCharacter = (id: string) => {
-    console.log(id);
     // Find the character that's being removed
     const character = characters.find((char) => char.id === id);
 
@@ -209,7 +208,6 @@ export default function CreateStoryPage() {
 
     // Remove the character from state
     setCharacters((prev) => prev.filter((char) => char.id !== id));
-    console.log(characters);
 
     // Clean up file input refs
     if (fileInputRefs.current[id]) {
