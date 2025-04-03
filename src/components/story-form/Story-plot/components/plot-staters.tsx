@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 const storyStarters = [
   "A magical trip to the moon",
@@ -11,10 +11,14 @@ const storyStarters = [
 ];
 
 interface StoryStarterProps {
-  onSelect: (starter: string) => void;
+  onSelect: (starter: string, index: number) => void;
+  selectedIndex: number | null;
 }
 
-export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
+export const StoryStarter = ({
+  onSelect,
+  selectedIndex,
+}: StoryStarterProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: "left" | "right") => {
@@ -37,6 +41,7 @@ export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
       <h2 className="text-xl font-semibold">Pick a Story Starter</h2>
       <div className="relative group">
         <button
+          type="button"
           onClick={() => scroll("left")}
           className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm group-hover:opacity-100 transition-opacity disabled:opacity-0"
           aria-label="Previous stories"
@@ -51,12 +56,13 @@ export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
         >
           {storyStarters.map((starter, index) => (
             <button
+              type="button"
               key={index}
-              onClick={() => onSelect(starter)}
-              className={`flex-none w-[200px] p-6 rounded-2xl text-center transition-all snap-start ${
-                index === 0
+              onClick={() => onSelect(starter, index)}
+              className={`flex-none w-full sm:w-[200px] p-6 rounded-2xl text-center transition-all snap-start ${
+                index === selectedIndex
                   ? "bg-[#9B87F5] text-white hover:bg-[#8B5CF6]"
-                  : "bg-gray-50 hover:bg-gray-100"
+                  : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
               {starter}
@@ -65,6 +71,7 @@ export const StoryStarter = ({ onSelect }: StoryStarterProps) => {
         </div>
 
         <button
+          type="button"
           onClick={() => scroll("right")}
           className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm group-hover:opacity-100 transition-opacity disabled:opacity-0"
           aria-label="Next stories"

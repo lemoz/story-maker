@@ -1,17 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup } from "@/components/ui/radio-group";
 import { Camera, PencilLine } from "lucide-react";
 import { StoryStarter } from "./components/plot-staters";
-import {
-  PhotoUploadContent,
-  StoryDescriptionContent,
-} from "./components/plot-content";
 import { PlotOptionCard } from "./components/plot-option-card";
 
 interface StoryPlotSectionProps {
-  storyPlotOption: string;
-  onPlotOptionChange: (value: string) => void;
+  storyPlotOption: "starter" | "photos" | "describe";
+  onPlotOptionChange: (value: "starter" | "photos" | "describe") => void;
   storyDescription: string;
   onDescriptionChange: (value: string) => void;
   eventPhotos: File[];
@@ -36,19 +32,32 @@ export function StoryPlotSection({
   isGeneratingIdea,
   eventPhotosInputRef,
 }: StoryPlotSectionProps) {
-  const handleStoryStarterSelect = (starter: string) => {
-    onPlotOptionChange("describe");
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  const handleStoryStarterSelect = (starter: string, index: number) => {
+    onPlotOptionChange("starter");
     onDescriptionChange(starter);
+    setSelectedIndex(index);
+  };
+
+  const handleStoryPlotOptionChange = (
+    value: "starter" | "photos" | "describe"
+  ) => {
+    onPlotOptionChange(value);
+    setSelectedIndex(null);
   };
 
   return (
     <Card className="shadow-sm border-primary/10">
       <CardContent className="space-y-8 pt-6">
-        <StoryStarter onSelect={handleStoryStarterSelect} />
+        <StoryStarter
+          selectedIndex={selectedIndex}
+          onSelect={handleStoryStarterSelect}
+        />
 
         <RadioGroup
           value={storyPlotOption}
-          onValueChange={onPlotOptionChange}
+          onValueChange={handleStoryPlotOptionChange}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           <PlotOptionCard
