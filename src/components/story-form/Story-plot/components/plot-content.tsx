@@ -77,6 +77,21 @@ interface DropZoneProps {
   eventPhotosInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
+interface EmptyStateProps {
+  onClick: (e: React.MouseEvent) => void;
+}
+
+const EmptyState = ({ onClick }: EmptyStateProps) => (
+  <div
+    onClick={onClick}
+    className="flex flex-col items-center justify-center gap-4 p-4 cursor-pointer"
+  >
+    <div className="w-12 h-12 rounded-2xl flex items-center justify-center">
+      <Plus className="w-12 h-12 text-gray-400" />
+    </div>
+  </div>
+);
+
 const DropZone = ({
   eventPhotos,
   eventPhotosPreviews,
@@ -85,16 +100,18 @@ const DropZone = ({
 }: DropZoneProps) => {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    eventPhotosInputRef.current?.click();
+    e.stopPropagation();
+    if (eventPhotosInputRef.current) {
+      eventPhotosInputRef.current.click();
+    }
   };
 
   return (
     <div
-      className={`w-fit rounded-2xl cursor-pointer transition-colors bg-gray-50/50 ${
+      className={`w-fit rounded-2xl transition-colors bg-gray-50/50 ${
         eventPhotos.length === 0 &&
         "border-2 border-dashed border-primary/20 hover:border-[#9B87F5]"
       }`}
-      onClick={handleClick}
     >
       {eventPhotos.length === 0 ? (
         <EmptyState onClick={handleClick} />
@@ -110,22 +127,6 @@ const DropZone = ({
   );
 };
 
-const EmptyState = ({
-  onClick,
-}: {
-  onClick: (e: React.MouseEvent) => void;
-}) => (
-  <button
-    type="button"
-    className="h-full w-full flex flex-col items-start justify-center text-muted-foreground p-4 bg-transparent border-0"
-    onClick={onClick}
-  >
-    <div className="w-12 h-12 rounded-xl flex items-center justify-center">
-      <Plus className="h-6 w-6 text-gray-400" />
-    </div>
-  </button>
-);
-
 interface PhotoGridProps {
   eventPhotosPreviews: string[];
   onRemoveEventPhoto: (index: number) => void;
@@ -138,24 +139,34 @@ const PhotoGrid = ({
   onRemoveEventPhoto,
   eventPhotosInputRef,
   photosCount,
-}: PhotoGridProps) => (
-  <div>
-    <div className="flex flex-wrap gap-2 mb-3">
-      {eventPhotosPreviews.map((previewUrl, index) => (
-        <PhotoPreview
-          key={index}
-          previewUrl={previewUrl}
-          index={index}
-          onRemove={onRemoveEventPhoto}
-        />
-      ))}
-      <AddMoreButton onClick={() => eventPhotosInputRef.current?.click()} />
+}: PhotoGridProps) => {
+  const handleAddMoreClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (eventPhotosInputRef.current) {
+      eventPhotosInputRef.current.click();
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {eventPhotosPreviews.map((previewUrl, index) => (
+          <PhotoPreview
+            key={index}
+            previewUrl={previewUrl}
+            index={index}
+            onRemove={onRemoveEventPhoto}
+          />
+        ))}
+        <AddMoreButton onClick={() => eventPhotosInputRef.current?.click()} />
+      </div>
+      <p className="text-sm font-normal text-muted-foreground">
+        {photosCount}/5 photos
+      </p>
     </div>
-    <p className="text-sm font-normal text-muted-foreground">
-      {photosCount}/5 photos
-    </p>
-  </div>
-);
+  );
+};
 
 interface PhotoPreviewProps {
   previewUrl: string;
@@ -186,6 +197,11 @@ const PhotoPreview = ({ previewUrl, index, onRemove }: PhotoPreviewProps) => (
   </div>
 );
 
+interface StoryDescriptionContentProps {
+  storyDescription: string;
+  onDescriptionChange: (value: string) => void;
+}
+
 const AddMoreButton = ({ onClick }: { onClick: () => void }) => (
   <button
     className="w-24 h-24 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-400 hover:border-[#9B87F5] transition-colors"
@@ -199,11 +215,6 @@ const AddMoreButton = ({ onClick }: { onClick: () => void }) => (
     <Plus className="h-6 w-6 text-gray-400" />
   </button>
 );
-
-interface StoryDescriptionContentProps {
-  storyDescription: string;
-  onDescriptionChange: (value: string) => void;
-}
 
 export const StoryDescriptionContent = ({
   storyDescription,
