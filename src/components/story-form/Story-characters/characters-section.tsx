@@ -18,7 +18,6 @@ export interface Character {
 interface CharactersSectionProps {
   characters: Character[];
   onAddCharacter: () => void;
-  onRemoveCharacter: (id: string) => void;
   onCharacterChange: (id: string, field: keyof Character, value: any) => void;
   onRemovePhoto: (id: string) => void;
   handleRemoveCharacter: (id: string) => void;
@@ -28,7 +27,6 @@ interface CharactersSectionProps {
 export function CharactersSection({
   characters,
   onAddCharacter,
-  onRemoveCharacter,
   onCharacterChange,
   onRemovePhoto,
   handleRemoveCharacter,
@@ -79,14 +77,19 @@ export function CharactersSection({
     if (state === CharacterState.CharacterCreation && character) {
       return !!character.name;
     }
-    return true;
+
+    if (state === CharacterState.CharactersManagement) {
+      return characters.length > 0;
+    }
+
+    return false;
   };
 
   const handleCancel = () => {
     if (character?.id) {
-      onRemoveCharacter(character.id);
+      handleRemoveCharacter(character.id);
     }
-    setState(CharacterState.Initial);
+    setState(CharacterState.CharactersManagement);
   };
 
   const handleEditCharacter = (id: string) => {
