@@ -10,7 +10,7 @@ import {
 import {
   CharactersSection,
   type Character,
-} from "@/components/story-form/characters-section";
+} from "@/components/story-form/Story-characters/characters-section";
 import { StoryPlotSection } from "@/components/story-form/Story-plot/story-plot-section";
 import { StoryDetailsSection } from "@/components/story-form/story-details-section";
 import { SubmitButton } from "@/components/story-form/submit-button";

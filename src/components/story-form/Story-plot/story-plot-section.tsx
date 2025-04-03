@@ -4,6 +4,8 @@ import { RadioGroup } from "@/components/ui/radio-group";
 import { Camera, PencilLine } from "lucide-react";
 import { StoryStarter } from "./components/plot-staters";
 import { PlotOptionCard } from "./components/plot-option-card";
+import { FixedButton } from "../fixedButton";
+import { StoryState } from "@/types/states";
 
 interface StoryPlotSectionProps {
   storyPlotOption: "starter" | "photos" | "describe";
@@ -45,6 +47,10 @@ export function StoryPlotSection({
   ) => {
     onPlotOptionChange(value);
     setSelectedIndex(null);
+  };
+
+  const isStoryDescriptionValid = () => {
+    return storyDescription.length > 0 || eventPhotos.length > 0;
   };
 
   return (
@@ -93,6 +99,12 @@ export function StoryPlotSection({
             onDescriptionChange={onDescriptionChange}
           />
         </RadioGroup>
+
+        <FixedButton
+          state={StoryState.StoryDescription}
+          onClick={onSuggestStoryIdea}
+          isValid={isStoryDescriptionValid()}
+        />
       </CardContent>
     </Card>
   );
