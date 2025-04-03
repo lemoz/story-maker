@@ -52,9 +52,11 @@ export default function CreateStoryPage() {
   const eventPhotosInputRef = React.useRef<HTMLInputElement>(null);
 
   // State hooks for form values
-  const [storyPlotOption, setStoryPlotOption] = useState<string>("photos");
-  const [ageRange, setAgeRange] = useState<string>("");
-  const [storyStyle, setStoryStyle] = useState<string>("");
+  const [storyPlotOption, setStoryPlotOption] = useState<
+    "starter" | "photos" | "describe"
+  >("starter");
+  const [ageRange, setAgeRange] = useState<string>("3-4");
+  const [storyStyle, setStoryStyle] = useState<string>("whimsical");
   const [storyLengthTargetPages, setStoryLengthTargetPages] =
     useState<number>(6); // Default ~6 pages
   const [characters, setCharacters] = useState<Character[]>([]);
