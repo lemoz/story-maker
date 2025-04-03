@@ -6,6 +6,7 @@ import { StoryStarter } from "./components/plot-staters";
 import { PlotOptionCard } from "./components/plot-option-card";
 import { FixedButton } from "../fixedButton";
 import { StoryState } from "@/types/states";
+import { Button } from "@/components/ui/button";
 
 interface StoryPlotSectionProps {
   storyPlotOption: "starter" | "photos" | "describe";
@@ -19,6 +20,7 @@ interface StoryPlotSectionProps {
   onSuggestStoryIdea: () => void;
   isGeneratingIdea: boolean;
   eventPhotosInputRef: React.RefObject<HTMLInputElement | null>;
+  onBack: () => void;
 }
 
 export function StoryPlotSection({
@@ -33,6 +35,7 @@ export function StoryPlotSection({
   onSuggestStoryIdea,
   isGeneratingIdea,
   eventPhotosInputRef,
+  onBack,
 }: StoryPlotSectionProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -99,6 +102,15 @@ export function StoryPlotSection({
             onDescriptionChange={onDescriptionChange}
           />
         </RadioGroup>
+
+        <Button
+          className="w-fit"
+          type="button"
+          variant="outline"
+          onClick={onBack}
+        >
+          Back
+        </Button>
 
         <FixedButton
           state={StoryState.StoryDescription}

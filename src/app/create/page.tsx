@@ -944,6 +944,7 @@ export default function CreateStoryPage() {
                 onSuggestStoryIdea={suggestStoryIdeaFromPhotos}
                 isGeneratingIdea={isGeneratingIdea}
                 eventPhotosInputRef={eventPhotosInputRef}
+                onBack={handleBack}
               />
             )}
 
