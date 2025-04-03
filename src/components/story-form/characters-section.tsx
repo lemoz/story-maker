@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Camera, Plus, X, Trash2 } from "lucide-react";
 
-// Character interface
 export interface Character {
   id: string;
   name: string;
@@ -23,7 +22,7 @@ interface CharactersSectionProps {
   onCharacterChange: (id: string, field: keyof Character, value: any) => void;
   onRemovePhoto: (id: string) => void;
   handleRemoveCharacter: (id: string) => void;
-  handleEditCharacter: (id: string) => void;
+  onGoNext: () => void;
 }
 
 enum CharacterState {
@@ -82,12 +81,11 @@ export function CharactersSection({
   onCharacterChange,
   onRemovePhoto,
   handleRemoveCharacter,
-  handleEditCharacter,
+  onGoNext,
 }: CharactersSectionProps) {
   const [state, setState] = useState(CharacterState.Initial);
   const [character, setCharacter] = useState<Character | null>(null);
 
-  // Observa mudanças no array de characters
   React.useEffect(() => {
     if (state === CharacterState.CharacterCreation && characters.length > 0) {
       setCharacter(characters[characters.length - 1]);
@@ -118,6 +116,9 @@ export function CharactersSection({
           setState(CharacterState.CharactersManagement);
         }
         break;
+      case CharacterState.CharactersManagement:
+        onGoNext();
+        break;
       default:
         break;
     }
@@ -137,6 +138,18 @@ export function CharactersSection({
     setState(CharacterState.Initial);
   };
 
+  const handleEditCharacter = (id: string) => {
+    setState(CharacterState.CharacterCreation);
+    const characterToEdit = characters.find((character) => character.id === id);
+    if (characterToEdit) {
+      setCharacter(characterToEdit);
+    }
+  };
+
+  const handleRemoveImage = (id: string) => {
+    onRemovePhoto(id);
+  };
+
   return (
     <div className="min-h-[300px] w-full flex flex-col items-center justify-start pb-24">
       {state === CharacterState.Initial && (
@@ -148,6 +161,7 @@ export function CharactersSection({
         <CharacterCreationContainer
           character={character}
           onCharacterChange={handleCharacterChange}
+          onRemoveImage={handleRemoveImage}
           onCancel={handleCancel}
         />
       )}
@@ -217,10 +231,12 @@ const InitialCharacterContainer = ({
 const CharacterCreationContainer = ({
   character,
   onCharacterChange,
+  onRemoveImage,
   onCancel,
 }: {
   character: Character;
   onCharacterChange: (id: string, field: keyof Character, value: any) => void;
+  onRemoveImage: (id: string) => void;
   onCancel: () => void;
 }) => {
   const handleUploadAvatar = () => {
@@ -313,7 +329,6 @@ const CharacterCreationContainer = ({
           </p>
 
           <div className="flex gap-4 items-center">
-            {/* Upload Button */}
             <button
               type="button"
               onClick={() => handleUploadAvatar()}
@@ -351,7 +366,6 @@ const CharacterCreationContainer = ({
               </svg>
             </button>
 
-            {/* Avatar Preview */}
             {character.photoPreviewUrl && (
               <div className="w-16 h-16 rounded-full border-2 border-primary overflow-hidden">
                 <img
@@ -366,12 +380,21 @@ const CharacterCreationContainer = ({
           {character.photoPreviewUrl && (
             <div className="mt-6 flex flex-col items-center gap-2">
               <h3 className="text-sm font-medium">Selected Avatar:</h3>
-              <div className="w-16 h-16 rounded-full border-2 border-primary overflow-hidden">
-                <img
-                  src={character.photoPreviewUrl}
-                  alt="Selected avatar preview"
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-2 border-primary overflow-hidden">
+                  <img
+                    src={character.photoPreviewUrl}
+                    alt="Selected avatar preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveImage(character.id)}
+                  className="absolute -top-2 -right-3 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
               </div>
             </div>
           )}
