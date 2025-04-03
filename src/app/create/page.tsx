@@ -11,7 +11,7 @@ import {
   CharactersSection,
   type Character,
 } from "@/components/story-form/characters-section";
-import { StoryPlotSection } from "@/components/story-form/story-plot-section";
+import { StoryPlotSection } from "@/components/story-form/Story-plot/story-plot-section";
 import { StoryDetailsSection } from "@/components/story-form/story-details-section";
 import { SubmitButton } from "@/components/story-form/submit-button";
 import { Stepper } from "@/components/story-form/stepper";
@@ -34,21 +34,13 @@ interface StoryRequestBody {
   uploadedStoryPhotoUrls?: string[];
 }
 
-const FORM_STEPS = [
-  {
-    title: "Let's Create Your Characters!",
-    description:
-      "Add the heroes of your tale! Give them a name, gender, and a special look.",
-  },
-  {
-    title: "What's Your Story About?",
-    description: "Upload photos from your day or describe your story idea.",
-  },
-  {
-    title: "Customize Your Story",
-    description: "Choose the age range, style, and length of your story.",
-  },
-];
+const fillStoryPlotDescriptionByCharacters = (characters: Character[]) => {
+  if (characters.length === 1) {
+    return characters[0].name;
+  } else {
+    return characters.length + " characters";
+  }
+};
 
 export default function CreateStoryPage() {
   const router = useRouter();
@@ -85,6 +77,25 @@ export default function CreateStoryPage() {
 
   // Add current step state
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Form steps
+  const FORM_STEPS = [
+    {
+      title: "Let's Create Your Characters!",
+      description:
+        "Add the heroes of your tale! Give them a name, gender, and a special look.",
+    },
+    {
+      title: "How Should We Start Your Story?",
+      description: `Choose a way to inspire your story with ${fillStoryPlotDescriptionByCharacters(
+        characters
+      )}`,
+    },
+    {
+      title: "Customize Your Story",
+      description: "Choose the age range, style, and length of your story.",
+    },
+  ];
 
   // Cleanup object URLs to prevent memory leaks
   useEffect(() => {
@@ -162,7 +173,7 @@ export default function CreateStoryPage() {
       id: crypto.randomUUID(),
       name: "",
       isMain: false,
-      gender: "unspecified",
+      gender: "female",
       photoFile: null,
       photoPreviewUrl: null,
       uploadedPhotoUrl: null,
@@ -914,9 +925,7 @@ export default function CreateStoryPage() {
                 onCharacterChange={handleCharacterChange}
                 onRemovePhoto={handleRemovePhoto}
                 handleRemoveCharacter={handleRemoveCharacter}
-                handleEditCharacter={(id: string) =>
-                  console.log("edit character")
-                }
+                onGoNext={handleNext}
               />
             )}
 
