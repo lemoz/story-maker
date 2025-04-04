@@ -58,7 +58,7 @@ export default function CreateStoryPage() {
   const [ageRange, setAgeRange] = useState<string>("3-4");
   const [storyStyle, setStoryStyle] = useState<string>("whimsical");
   const [storyLengthTargetPages, setStoryLengthTargetPages] =
-    useState<number>(6); // Default ~6 pages
+    useState<number>(4); // Default 4 pages
   const [characters, setCharacters] = useState<Character[]>([]);
   const [storyDescription, setStoryDescription] = useState<string>("");
   const [eventPhotos, setEventPhotos] = useState<File[]>([]); // State for event photos
