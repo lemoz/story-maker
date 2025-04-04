@@ -13,7 +13,6 @@ import {
 } from "@/components/story-form/Story-characters/characters-section";
 import { StoryPlotSection } from "@/components/story-form/Story-plot/story-plot-section";
 import { StoryDetailsSection } from "@/components/story-form/story-details-section";
-import { SubmitButton } from "@/components/story-form/submit-button";
 import { Stepper } from "@/components/story-form/stepper";
 
 // Request body interface
@@ -94,24 +93,56 @@ export default function CreateStoryPage() {
   // Add current step state
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Form steps
-  const FORM_STEPS = [
-    {
-      title: "Let's Create Your Characters!",
-      description:
-        "Add the heroes of your tale! Give them a name, gender, and a special look.",
-    },
-    {
-      title: "How Should We Start Your Story?",
-      description: `Choose a way to inspire your story with ${fillStoryPlotDescriptionByCharacters(
-        characters
-      )}`,
-    },
-    // {
-    //   title: "Customize Your Story",
-    //   description: "Choose the age range, style, and length of your story.",
-    // },
-  ];
+  // Get email from URL params
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get("email");
+    if (email) {
+      setUserEmail(email);
+    }
+  }, []);
+
+  // Form steps - Dynamic based on email presence
+  const getFormSteps = () => {
+    const baseSteps = [
+      {
+        title: "Let's Create Your Characters!",
+        description:
+          "Add the heroes of your tale! Give them a name, gender, and a special look.",
+      },
+    ];
+
+    // Only add age range and story length steps if user has email
+    if (userEmail) {
+      baseSteps.push(
+        {
+          title: "Choose Your Story Details",
+          description:
+            "Select the target age group, story theme and number of pages for your story.",
+        },
+        {
+          title: "How Should We Start Your Story?",
+          description: `Choose a way to inspire your story with ${fillStoryPlotDescriptionByCharacters(
+            characters
+          )}`,
+        }
+      );
+    } else {
+      baseSteps.push({
+        title: "How Should We Start Your Story?",
+        description: `Choose a way to inspire your story with ${fillStoryPlotDescriptionByCharacters(
+          characters
+        )}`,
+      });
+    }
+
+    return baseSteps;
+  };
+
+  // Get current form steps
+  const FORM_STEPS = getFormSteps();
 
   // Cleanup object URLs to prevent memory leaks
   useEffect(() => {
@@ -310,8 +341,6 @@ export default function CreateStoryPage() {
   };
 
   // Handle email collection
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
   const handleEmailSubmit = async (email: string, isSubmited: boolean) => {
     try {
       setUserEmail(email);
@@ -350,7 +379,7 @@ export default function CreateStoryPage() {
 
       // Redirect to story page
       if (isSubmited) {
-        router.push(`/story/${generationStatus.storyId}`);
+        router.push(`/story/${generationStatus.storyId}?email=${email}`);
       }
     } catch (error) {
       console.error("Error handling email submission:", error);
@@ -946,7 +975,6 @@ export default function CreateStoryPage() {
             </div>
           )}
 
-          {/* Show story generation progress when active */}
           {showProgress ? (
             <div className="w-full">
               <StoryGenerationProgress
@@ -973,7 +1001,20 @@ export default function CreateStoryPage() {
                 />
               )}
 
-              {currentStep === 1 && (
+              {userEmail && currentStep === 1 && (
+                <StoryDetailsSection
+                  ageRange={ageRange}
+                  onAgeRangeChange={setAgeRange}
+                  storyStyle={storyStyle}
+                  onStoryStyleChange={setStoryStyle}
+                  storyLengthTargetPages={storyLengthTargetPages}
+                  onStoryLengthChange={setStoryLengthTargetPages}
+                  isPremium={!!userEmail}
+                  onGoNext={handleNext}
+                />
+              )}
+
+              {currentStep === (userEmail ? 2 : 1) && (
                 <StoryPlotSection
                   storyPlotOption={storyPlotOption}
                   onPlotOptionChange={setStoryPlotOption}
@@ -991,16 +1032,17 @@ export default function CreateStoryPage() {
                 />
               )}
 
-              {/* {currentStep === 2 && (
-              <StoryDetailsSection
-                ageRange={ageRange}
-                onAgeRangeChange={setAgeRange}
-                storyStyle={storyStyle}
-                onStoryStyleChange={setStoryStyle}
-                storyLengthTargetPages={storyLengthTargetPages}
-                onStoryLengthChange={setStoryLengthTargetPages}
-              />
-            )} */}
+              {/* {userEmail && currentStep === 3 && (
+                <StoryDetailsSection
+                  ageRange={ageRange}
+                  onAgeRangeChange={setAgeRange}
+                  storyStyle={storyStyle}
+                  onStoryStyleChange={setStoryStyle}
+                  storyLengthTargetPages={storyLengthTargetPages}
+                  onStoryLengthChange={setStoryLengthTargetPages}
+                  isPremium={!!userEmail}
+                />
+              )} */}
             </div>
           )}
         </form>

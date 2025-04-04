@@ -512,24 +512,39 @@ export function StoryGenerationProgress({
             <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-md text-green-800 text-sm">
               <p>Your story has been created successfully!</p>
             </div>
-            <Button
-              type="button"
-              className="mt-4 w-full"
-              onClick={() => {
-                if (!status.storyId) {
-                  console.error("No storyId available for redirection");
-                  return;
-                }
+            <div className="flex flex-col gap-2 mt-4">
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => {
+                  if (!status.storyId) {
+                    console.error("No storyId available for redirection");
+                    return;
+                  }
 
-                if (!emailSubmitted) {
-                  setShowUnlockDialog(true);
-                } else {
-                  router.push(`/story/${status.storyId}`);
-                }
-              }}
-            >
-              View My Story
-            </Button>
+                  if (!emailSubmitted) {
+                    setShowUnlockDialog(true);
+                  } else {
+                    router.push(`/story/${status.storyId}?email=${email}`);
+                  }
+                }}
+              >
+                View My Story
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
+                onClick={() => {
+                  if (email) {
+                    router.push(`/create?email=${encodeURIComponent(email)}`);
+                  } else {
+                    router.push("/create");
+                  }
+                }}
+              >
+                Create Another Story
+              </Button>
+            </div>
             <UnlockStoryDialog
               open={showUnlockDialog}
               onOpenChange={setShowUnlockDialog}
@@ -543,7 +558,7 @@ export function StoryGenerationProgress({
                   setShowUnlockDialog(false);
 
                   if (status.storyId) {
-                    router.push(`/story/${status.storyId}`);
+                    router.push(`/story/${status.storyId}?email=${email}`);
                   }
                 } catch (error) {
                   console.error("Error submitting email:", error);

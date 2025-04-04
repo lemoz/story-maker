@@ -10,6 +10,8 @@ export enum StoryState {
   PhotoUpload = "PHOTO_UPLOAD",
   StoryDescription = "STORY_DESCRIPTION",
   CharacterCreation = "CHARACTER_CREATION",
+  AgeRangeSelection = "AGE_RANGE_SELECTION",
+  StoryLengthSelection = "STORY_LENGTH_SELECTION",
   Review = "REVIEW",
   Generating = "GENERATING",
   Complete = "COMPLETE",

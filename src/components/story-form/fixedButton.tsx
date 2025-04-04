@@ -30,6 +30,12 @@ export const FixedButton = ({
           text: "Start Generating My Story ✨",
           icon: null,
         };
+      case StoryState.AgeRangeSelection:
+        return {
+          text: "Next",
+          icon: null,
+        };
+
       default:
         return;
     }

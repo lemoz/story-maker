@@ -68,6 +68,15 @@ export default function StoryViewerPage() {
   const [showImageRegenDialog, setShowImageRegenDialog] = useState(false);
   const [imageRegenComment, setImageRegenComment] = useState("");
   const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get("email");
+    if (email) {
+      setUserEmail(email);
+    }
+  }, []);
 
   // Fetch story data
   useEffect(() => {
@@ -312,7 +321,7 @@ export default function StoryViewerPage() {
           <Button
             variant="outline"
             className="gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
-            onClick={() => router.push("/create")}
+            onClick={() => router.push(`/create?email=${userEmail}`)}
           >
             <Plus className="h-4 w-4" /> Create Another
           </Button>
