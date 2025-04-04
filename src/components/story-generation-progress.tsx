@@ -14,8 +14,11 @@ import {
   Mail,
   BookMarked,
   User,
+  Link,
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { UnlockStoryDialog } from "@/components/unlock-story-dialog";
+import { useRouter } from "next/navigation";
 
 type ProgressStep =
   | "validating"
@@ -29,6 +32,7 @@ export type StoryGenerationStatus = {
   step: ProgressStep;
   error?: string;
   detail?: string; // General detail message for any step
+  storyId?: string;
   illustrationProgress?: {
     current: number;
     total: number;
@@ -39,7 +43,7 @@ export type StoryGenerationStatus = {
 
 type StoryGenerationProgressProps = {
   status: StoryGenerationStatus;
-  onEmailSubmit?: (email: string) => void;
+  onEmailSubmit?: (email: string, isSubmited: boolean) => void;
   characters?: Array<{
     name: string;
     photoPreviewUrl: string | null;
@@ -54,6 +58,8 @@ export function StoryGenerationProgress({
   const [email, setEmail] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [emailSubmitted, setEmailSubmitted] = React.useState(false);
+  const [showUnlockDialog, setShowUnlockDialog] = React.useState(false);
+  const router = useRouter();
 
   // Calculate progress percentage based on current step
   const calculateProgress = () => {
@@ -70,7 +76,7 @@ export function StoryGenerationProgress({
     return stepPositions[status.step] || 0;
   };
 
-  const handleSubmitEmail = (e: React.FormEvent) => {
+  const handleSubmitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Basic email validation
@@ -80,25 +86,27 @@ export function StoryGenerationProgress({
 
     setIsSubmitting(true);
 
-    // Call the parent handler if provided
-    if (onEmailSubmit) {
-      onEmailSubmit(email);
-    }
+    try {
+      // Call the parent handler if provided
+      if (onEmailSubmit) {
+        await onEmailSubmit(email, false);
+      }
 
-    // Track email submission event with Meta Pixel
-    if (typeof window !== "undefined" && window.trackFBEvent) {
-      window.trackFBEvent("Lead", {
-        content_name: "story_generation_email",
-        content_category: "story_creation",
-      });
-      console.log("Meta Pixel: Tracked Lead event for email collection");
-    }
+      // Track email submission event with Meta Pixel
+      if (typeof window !== "undefined" && window.trackFBEvent) {
+        window.trackFBEvent("Lead", {
+          content_name: "story_generation_email",
+          content_category: "story_creation",
+        });
+        console.log("Meta Pixel: Tracked Lead event for email collection");
+      }
 
-    // Simulate API call for now
-    setTimeout(() => {
-      setIsSubmitting(false);
       setEmailSubmitted(true);
-    }, 800);
+    } catch (error) {
+      console.error("Error submitting email:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Get icon and text for the current step
@@ -202,7 +210,7 @@ export function StoryGenerationProgress({
   }
 
   return (
-    <Card className="w-full max-w-3xl mx-auto">
+    <Card className="w-full sm:w-[1024px] max-w-3xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl">
           <Sparkles className="h-5 w-5 text-primary" />
@@ -448,10 +456,7 @@ export function StoryGenerationProgress({
                   </div>
                 </div>
 
-                <form
-                  onSubmit={handleSubmitEmail}
-                  className="flex mt-2 gap-2 items-center"
-                >
+                <div className="flex mt-2 gap-2 items-center">
                   <Input
                     type="email"
                     placeholder="your@email.com"
@@ -462,7 +467,7 @@ export function StoryGenerationProgress({
                     required
                   />
                   <Button
-                    type="submit"
+                    onClick={handleSubmitEmail}
                     size="sm"
                     className="h-8 py-0 px-3"
                     disabled={isSubmitting}
@@ -473,7 +478,7 @@ export function StoryGenerationProgress({
                       <span>Notify Me</span>
                     )}
                   </Button>
-                </form>
+                </div>
               </div>
             </div>
           )}
@@ -503,15 +508,49 @@ export function StoryGenerationProgress({
 
         {/* Complete state */}
         {status.step === "complete" && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-md text-green-800 text-sm space-y-3">
-            <p>
-              Your story has been created successfully! Redirecting you to your
-              story...
-            </p>
-            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 animate-progress"></div>
+          <>
+            <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-md text-green-800 text-sm">
+              <p>Your story has been created successfully!</p>
             </div>
-          </div>
+            <Button
+              type="button"
+              className="mt-4 w-full"
+              onClick={() => {
+                if (!status.storyId) {
+                  console.error("No storyId available for redirection");
+                  return;
+                }
+
+                if (!emailSubmitted) {
+                  setShowUnlockDialog(true);
+                } else {
+                  router.push(`/story/${status.storyId}`);
+                }
+              }}
+            >
+              View My Story
+            </Button>
+            <UnlockStoryDialog
+              open={showUnlockDialog}
+              onOpenChange={setShowUnlockDialog}
+              storyId={status.storyId || ""}
+              onEmailSubmit={async (email) => {
+                try {
+                  if (onEmailSubmit) {
+                    await onEmailSubmit(email, true);
+                  }
+                  setEmailSubmitted(true);
+                  setShowUnlockDialog(false);
+
+                  if (status.storyId) {
+                    router.push(`/story/${status.storyId}`);
+                  }
+                } catch (error) {
+                  console.error("Error submitting email:", error);
+                }
+              }}
+            />
+          </>
         )}
       </CardContent>
     </Card>

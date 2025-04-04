@@ -312,10 +312,50 @@ export default function CreateStoryPage() {
   // Handle email collection
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const handleEmailSubmit = (email: string) => {
-    setUserEmail(email);
-    console.log(`Will email story to: ${email}`);
-    // In a real implementation, store this email for later use
+  const handleEmailSubmit = async (email: string, isSubmited: boolean) => {
+    try {
+      setUserEmail(email);
+
+      // Store email in database
+      // const response = await fetch("/api/store-email", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     email,
+      //     storyId: generationStatus.storyId,
+      //   }),
+      // });
+
+      // if (!response.ok) {
+      //   throw new Error("Failed to store email");
+      // }
+
+      // // Send confirmation email to user
+      // const emailResponse = await fetch("/api/send-story-email", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     email,
+      //     storyId: generationStatus.storyId,
+      //   }),
+      // });
+
+      // if (!emailResponse.ok) {
+      //   throw new Error("Failed to send email");
+      // }
+
+      // Redirect to story page
+      if (isSubmited) {
+        router.push(`/story/${generationStatus.storyId}`);
+      }
+    } catch (error) {
+      console.error("Error handling email submission:", error);
+      setError("Failed to process email. Please try again.");
+    }
   };
 
   // Function to suggest a story idea based on uploaded photos
@@ -733,7 +773,10 @@ export default function CreateStoryPage() {
 
             case "complete":
               // Story generation completed successfully
-              setGenerationStatus({ step: "complete" });
+              setGenerationStatus({
+                step: "complete",
+                storyId: eventData.storyId,
+              });
 
               // Track successful story completion with Meta Pixel
               if (typeof window !== "undefined" && window.trackFBEvent) {
@@ -758,9 +801,9 @@ export default function CreateStoryPage() {
               }
 
               // Small delay before redirecting
-              setTimeout(() => {
-                router.push(`/story/${eventData.storyId}`);
-              }, 1500);
+              // setTimeout(() => {
+              //   router.push(`/story/${eventData.storyId}`);
+              // }, 1500);
               break;
 
             case "error":
