@@ -58,7 +58,7 @@ export default function CreateStoryPage() {
   const [ageRange, setAgeRange] = useState<string>("3-4");
   const [storyStyle, setStoryStyle] = useState<string>("whimsical");
   const [storyLengthTargetPages, setStoryLengthTargetPages] =
-    useState<number>(4); // Default 4 pages
+    useState<number>(3); // Default 3 pages
   const [characters, setCharacters] = useState<Character[]>([]);
   const [storyDescription, setStoryDescription] = useState<string>("");
   const [eventPhotos, setEventPhotos] = useState<File[]>([]); // State for event photos
@@ -641,7 +641,7 @@ export default function CreateStoryPage() {
                   detail: eventData.message,
                 });
               } else if (eventData.step === "illustrating") {
-                // Preserve any existing previewUrl when updating illustration progress
+                // Preserve any existing previewUrls when updating illustration progress
                 setGenerationStatus((prev) => {
                   const newProgress = eventData.illustrationProgress || {
                     current: 0,
@@ -649,17 +649,17 @@ export default function CreateStoryPage() {
                     detail: eventData.message,
                   };
 
-                  // Preserve the existing previewUrl if it exists and isn't in the new data
+                  // Preserve the existing previewUrls if they exist and aren't in the new data
                   if (
                     prev.step === "illustrating" &&
-                    prev.illustrationProgress?.previewUrl &&
-                    !newProgress.previewUrl
+                    prev.illustrationProgress?.previewUrls &&
+                    !newProgress.previewUrls
                   ) {
                     console.log(
-                      "Preserving existing previewUrl during progress update"
+                      "Preserving existing previewUrls during progress update"
                     );
-                    newProgress.previewUrl =
-                      prev.illustrationProgress.previewUrl;
+                    newProgress.previewUrls =
+                      prev.illustrationProgress.previewUrls;
                   }
 
                   return {
@@ -680,7 +680,10 @@ export default function CreateStoryPage() {
                 "SSE Handler: Received image_preview event data:",
                 eventData
               ); // Debug log
-              if (eventData?.previewUrl) {
+              if (
+                eventData?.previewUrl &&
+                typeof eventData.pageIndex === "number"
+              ) {
                 // Check if previewUrl exists in data
                 setGenerationStatus((prev) => {
                   // Only update if currently illustrating and progress data exists
@@ -694,18 +697,26 @@ export default function CreateStoryPage() {
                     return prev;
                   }
 
-                  // Merge the new previewUrl correctly
+                  // Get existing preview URLs or initialize empty map
+                  const existingPreviewUrls =
+                    prev.illustrationProgress.previewUrls || {};
+
+                  // Add new preview URL to the map
+                  const updatedPreviewUrls = {
+                    ...existingPreviewUrls,
+                    [eventData.pageIndex + 1]: eventData.previewUrl, // Add 1 to make it 1-indexed
+                  };
+
+                  // Merge the new preview URLs into progress
                   const updatedProgress = {
                     ...prev.illustrationProgress,
-                    previewUrl: eventData.previewUrl, // Update the preview URL
-                    // Optionally update current count if needed:
-                    // current: eventData.pageIndex + 1 // If pageIndex is reliable
+                    previewUrls: updatedPreviewUrls,
                   };
 
                   console.log(
-                    "SSE Handler: Updating generationStatus with preview:",
-                    updatedProgress
-                  ); // Log the update
+                    "SSE Handler: Updating generationStatus with preview URLs:",
+                    updatedPreviewUrls
+                  );
 
                   return {
                     ...prev,
@@ -714,7 +725,7 @@ export default function CreateStoryPage() {
                 });
               } else {
                 console.warn(
-                  "Received image_preview event but previewUrl was missing:",
+                  "Received image_preview event but previewUrl or pageIndex was missing:",
                   eventData
                 );
               }
@@ -873,41 +884,9 @@ export default function CreateStoryPage() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  // Add step validation
-  const isCurrentStepValid = () => {
-    switch (currentStep) {
-      case 0: // Characters step
-        return characters.every((char) => char.name.trim() !== "");
-      case 1: // Story plot step
-        if (storyPlotOption === "describe") {
-          return storyDescription.trim() !== "";
-        }
-        return eventPhotos.length > 0;
-      case 2: // Story details step
-        return ageRange !== "" && storyStyle !== "";
-      default:
-        return false;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F8FF] to-white">
       <div className="container mx-auto h-screen sm:py-10 px-4 flex flex-row items-start justify-center">
-        {/* Story Generation Progress Dialog */}
-        <StoryGenerationProgress
-          open={showProgress}
-          onOpenChange={(open) => {
-            if (
-              generationStatus.step === "error" ||
-              generationStatus.step === "complete"
-            ) {
-              setShowProgress(open);
-            }
-          }}
-          status={generationStatus}
-          onEmailSubmit={handleEmailSubmit}
-        />
-
         <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
           {error && (
             <div
@@ -923,42 +902,53 @@ export default function CreateStoryPage() {
               </Alert>
             </div>
           )}
-          <div className="w-[100vw] sm:w-[85vw] md:w-[50vw] mt-8 bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
-            <Stepper steps={FORM_STEPS} currentStep={currentStep} />
-
-            {/* Step content */}
-            {currentStep === 0 && (
-              <CharactersSection
+          {/* Show story generation progress when active */}
+          {showProgress ? (
+            <div className="w-full">
+              <StoryGenerationProgress
+                status={generationStatus}
+                onEmailSubmit={handleEmailSubmit}
                 characters={characters}
-                onAddCharacter={handleAddCharacter}
-                onCharacterChange={handleCharacterChange}
-                onRemovePhoto={handleRemovePhoto}
-                handleRemoveCharacter={handleRemoveCharacter}
-                onGoNext={handleNext}
               />
-            )}
+            </div>
+          ) : (
+            <div className="w-[100vw] sm:w-[85vw] md:w-[50vw] bg-white rounded-2xl p-8 sm:p-8 shadow-lg relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] to-transparent pointer-events-none" />
 
-            {currentStep === 1 && (
-              <StoryPlotSection
-                storyPlotOption={storyPlotOption}
-                onPlotOptionChange={setStoryPlotOption}
-                storyDescription={storyDescription}
-                onDescriptionChange={setStoryDescription}
-                eventPhotos={eventPhotos}
-                eventPhotosPreviews={eventPhotosPreviews}
-                onEventPhotosUpload={handleEventPhotosUpload}
-                onRemoveEventPhoto={handleRemoveEventPhoto}
-                onSuggestStoryIdea={suggestStoryIdeaFromPhotos}
-                isGeneratingIdea={isGeneratingIdea}
-                eventPhotosInputRef={eventPhotosInputRef}
-                onBack={handleBack}
-                onSubmit={handleSubmit}
-              />
-            )}
+              <Stepper steps={FORM_STEPS} currentStep={currentStep} />
 
-            {currentStep === 2 && (
+              {/* Step content */}
+              {currentStep === 0 && (
+                <CharactersSection
+                  characters={characters}
+                  onAddCharacter={handleAddCharacter}
+                  onCharacterChange={handleCharacterChange}
+                  onRemovePhoto={handleRemovePhoto}
+                  handleRemoveCharacter={handleRemoveCharacter}
+                  onGoNext={handleNext}
+                />
+              )}
+
+              {currentStep === 1 && (
+                <StoryPlotSection
+                  storyPlotOption={storyPlotOption}
+                  onPlotOptionChange={setStoryPlotOption}
+                  storyDescription={storyDescription}
+                  onDescriptionChange={setStoryDescription}
+                  eventPhotos={eventPhotos}
+                  eventPhotosPreviews={eventPhotosPreviews}
+                  onEventPhotosUpload={handleEventPhotosUpload}
+                  onRemoveEventPhoto={handleRemoveEventPhoto}
+                  onSuggestStoryIdea={suggestStoryIdeaFromPhotos}
+                  isGeneratingIdea={isGeneratingIdea}
+                  eventPhotosInputRef={eventPhotosInputRef}
+                  onBack={handleBack}
+                  onSubmit={handleSubmit}
+                />
+              )}
+
+              {/* {currentStep === 2 && (
               <StoryDetailsSection
                 ageRange={ageRange}
                 onAgeRangeChange={setAgeRange}
@@ -967,8 +957,9 @@ export default function CreateStoryPage() {
                 storyLengthTargetPages={storyLengthTargetPages}
                 onStoryLengthChange={setStoryLengthTargetPages}
               />
-            )}
-          </div>
+            )} */}
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -32,7 +32,11 @@ export function CharactersSection({
   handleRemoveCharacter,
   onGoNext,
 }: CharactersSectionProps) {
-  const [state, setState] = useState(CharacterState.Initial);
+  const [state, setState] = useState(() =>
+    characters.length > 0
+      ? CharacterState.CharactersManagement
+      : CharacterState.Initial
+  );
   const [character, setCharacter] = useState<Character | null>(null);
 
   useEffect(() => {
