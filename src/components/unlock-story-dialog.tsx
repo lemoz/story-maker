@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ export function UnlockStoryDialog({
   onEmailSubmit,
 }: UnlockStoryDialogProps) {
   const router = useRouter();
+  const { data: session } = useSession();
   const [email, setEmail] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 

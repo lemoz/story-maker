@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { MetaPixel } from "@/components/meta-pixel";
 import "./globals.css";
+import { Providers } from "./providers";
 
 // Import additional pixel initialization script
 import Script from "next/script";
@@ -20,15 +21,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EpicStory Creator",
-  description: "Generate personalized AI children's stories",
+  title: "Story Maker",
+  description: "Create personalized stories for your children",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <head>
@@ -49,9 +50,9 @@ export default function RootLayout({
         </Script>
         {/* Noscript fallback */}
         <noscript>
-          <img 
-            height="1" 
-            width="1" 
+          <img
+            height="1"
+            width="1"
             style={{ display: "none" }}
             src="https://www.facebook.com/tr?id=590024414092578&ev=PageView&noscript=1"
             alt=""
@@ -61,43 +62,45 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SessionProvider>
-          {/* Component-based implementation */}
-          <MetaPixel />
-          {/* Direct manual init in case component approach fails */}
-          <Script id="fb-pixel-init" strategy="afterInteractive">
-            {`
-              (function() {
-                if (typeof window !== 'undefined') {
-                  // Manual check and init
-                  if (!window.fbq) {
-                    console.warn("Meta Pixel: fbq not found at render time, initializing manually");
-                    !function(f,b,e,v,n,t,s)
-                    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-                    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-                    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-                    n.queue=[];t=b.createElement(e);t.async=!0;
-                    t.src=v;s=b.getElementsByTagName(e)[0];
-                    s.parentNode.insertBefore(t,s)}(window, document,'script',
-                    'https://connect.facebook.net/en_US/fbevents.js');
-                    
-                    if (window.fbq) {
-                      window.fbq('init', '590024414092578');
+        <Providers>
+          <SessionProvider>
+            {/* Component-based implementation */}
+            <MetaPixel />
+            {/* Direct manual init in case component approach fails */}
+            <Script id="fb-pixel-init" strategy="afterInteractive">
+              {`
+                (function() {
+                  if (typeof window !== 'undefined') {
+                    // Manual check and init
+                    if (!window.fbq) {
+                      console.warn("Meta Pixel: fbq not found at render time, initializing manually");
+                      !function(f,b,e,v,n,t,s)
+                      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                      n.queue=[];t=b.createElement(e);t.async=!0;
+                      t.src=v;s=b.getElementsByTagName(e)[0];
+                      s.parentNode.insertBefore(t,s)}(window, document,'script',
+                      'https://connect.facebook.net/en_US/fbevents.js');
+                      
+                      if (window.fbq) {
+                        window.fbq('init', '590024414092578');
+                        window.fbq('track', 'PageView');
+                        console.log("Meta Pixel: Manual init successful");
+                      }
+                    } else {
+                      console.log("Meta Pixel: fbq already available");
                       window.fbq('track', 'PageView');
-                      console.log("Meta Pixel: Manual init successful");
                     }
-                  } else {
-                    console.log("Meta Pixel: fbq already available");
-                    window.fbq('track', 'PageView');
                   }
-                }
-              })();
-            `}
-          </Script>
-          {children}
-          <Toaster richColors position="bottom-center" />
-          <Analytics />
-        </SessionProvider>
+                })();
+              `}
+            </Script>
+            {children}
+            <Toaster richColors position="bottom-center" />
+            <Analytics />
+          </SessionProvider>
+        </Providers>
       </body>
     </html>
   );

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -50,6 +51,7 @@ interface StoryData {
 export default function StoryViewerPage() {
   const params = useParams();
   const storyId = params.storyId as string;
+  const { data: session } = useSession();
 
   // State hooks
   const [storyData, setStoryData] = useState<StoryData | null>(null);
@@ -68,15 +70,6 @@ export default function StoryViewerPage() {
   const [showImageRegenDialog, setShowImageRegenDialog] = useState(false);
   const [imageRegenComment, setImageRegenComment] = useState("");
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const email = params.get("email");
-    if (email) {
-      setUserEmail(email);
-    }
-  }, []);
 
   // Fetch story data
   useEffect(() => {
@@ -321,7 +314,7 @@ export default function StoryViewerPage() {
           <Button
             variant="outline"
             className="gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
-            onClick={() => router.push(`/create?email=${userEmail}`)}
+            onClick={() => router.push(`/create`)}
           >
             <Plus className="h-4 w-4" /> Create Another
           </Button>

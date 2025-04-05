@@ -19,6 +19,7 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { UnlockStoryDialog } from "@/components/unlock-story-dialog";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 type ProgressStep =
   | "validating"
@@ -60,6 +61,7 @@ export function StoryGenerationProgress({
   const [emailSubmitted, setEmailSubmitted] = React.useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = React.useState(false);
   const router = useRouter();
+  const { data: session } = useSession();
 
   // Calculate progress percentage based on current step
   const calculateProgress = () => {
@@ -525,7 +527,7 @@ export function StoryGenerationProgress({
                   if (!emailSubmitted) {
                     setShowUnlockDialog(true);
                   } else {
-                    router.push(`/story/${status.storyId}?email=${email}`);
+                    router.push(`/story/${status.storyId}`);
                   }
                 }}
               >
@@ -536,7 +538,7 @@ export function StoryGenerationProgress({
                 className="w-full gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
                 onClick={() => {
                   if (email) {
-                    router.push(`/create?email=${encodeURIComponent(email)}`);
+                    router.push(`/create`);
                   } else {
                     router.push("/create");
                   }
@@ -558,7 +560,7 @@ export function StoryGenerationProgress({
                   setShowUnlockDialog(false);
 
                   if (status.storyId) {
-                    router.push(`/story/${status.storyId}?email=${email}`);
+                    router.push(`/story/${status.storyId}`);
                   }
                 } catch (error) {
                   console.error("Error submitting email:", error);

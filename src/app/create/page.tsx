@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   StoryGenerationProgress,
@@ -43,6 +44,7 @@ const fillStoryPlotDescriptionByCharacters = (characters: Character[]) => {
 
 export default function CreateStoryPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   // Create refs for file inputs
   const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>(
     {}
@@ -93,17 +95,6 @@ export default function CreateStoryPage() {
   // Add current step state
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Get email from URL params
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const email = params.get("email");
-    if (email) {
-      setUserEmail(email);
-    }
-  }, []);
-
   // Form steps - Dynamic based on email presence
   const getFormSteps = () => {
     const baseSteps = [
@@ -115,7 +106,7 @@ export default function CreateStoryPage() {
     ];
 
     // Only add age range and story length steps if user has email
-    if (userEmail) {
+    if (session) {
       baseSteps.push(
         {
           title: "Choose Your Story Details",
@@ -343,8 +334,6 @@ export default function CreateStoryPage() {
   // Handle email collection
   const handleEmailSubmit = async (email: string, isSubmited: boolean) => {
     try {
-      setUserEmail(email);
-
       // Store email in database
       // const response = await fetch("/api/store-email", {
       //   method: "POST",
@@ -379,7 +368,7 @@ export default function CreateStoryPage() {
 
       // Redirect to story page
       if (isSubmited) {
-        router.push(`/story/${generationStatus.storyId}?email=${email}`);
+        router.push(`/story/${generationStatus.storyId}`);
       }
     } catch (error) {
       console.error("Error handling email submission:", error);
@@ -612,7 +601,7 @@ export default function CreateStoryPage() {
         ageRange,
         storyStyle,
         storyLengthTargetPages, // Number of pages for the story
-        email: userEmail, // Include email if provided
+        email: session?.user?.email || null, // Include email if provided
       };
 
       // Add uploaded story photo URLs to the request if using the photos option
@@ -1001,7 +990,7 @@ export default function CreateStoryPage() {
                 />
               )}
 
-              {userEmail && currentStep === 1 && (
+              {session && currentStep === 1 && (
                 <StoryDetailsSection
                   ageRange={ageRange}
                   onAgeRangeChange={setAgeRange}
@@ -1009,12 +998,12 @@ export default function CreateStoryPage() {
                   onStoryStyleChange={setStoryStyle}
                   storyLengthTargetPages={storyLengthTargetPages}
                   onStoryLengthChange={setStoryLengthTargetPages}
-                  isPremium={!!userEmail}
+                  isPremium={!!session}
                   onGoNext={handleNext}
                 />
               )}
 
-              {currentStep === (userEmail ? 2 : 1) && (
+              {currentStep === (session ? 2 : 1) && (
                 <StoryPlotSection
                   storyPlotOption={storyPlotOption}
                   onPlotOptionChange={setStoryPlotOption}
