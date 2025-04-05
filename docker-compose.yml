@@ -1,7 +1,5 @@
-version: "3.8"
-
 services:
-  postgres:
+  story_maker_db:
     image: postgres:latest
     container_name: story_maker_db
     environment:

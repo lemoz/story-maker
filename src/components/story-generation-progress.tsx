@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,11 +40,12 @@ export type StoryGenerationStatus = {
     detail?: string;
     previewUrls?: Record<number, string>; // Map of page number to preview URL
   };
+  onEmailSubmit?: (email: string) => void;
 };
 
 type StoryGenerationProgressProps = {
   status: StoryGenerationStatus;
-  onEmailSubmit?: (email: string, isSubmited: boolean) => void;
+  onEmailSubmit?: (email: string) => void;
   characters?: Array<{
     name: string;
     photoPreviewUrl: string | null;
@@ -56,12 +57,19 @@ export function StoryGenerationProgress({
   onEmailSubmit,
   characters,
 }: StoryGenerationProgressProps) {
-  const [email, setEmail] = React.useState("");
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [emailSubmitted, setEmailSubmitted] = React.useState(false);
-  const [showUnlockDialog, setShowUnlockDialog] = React.useState(false);
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const router = useRouter();
   const { data: session } = useSession();
+
+  // Update email when session changes
+  useEffect(() => {
+    if (session?.user?.email) {
+      setEmail(session.user.email);
+    }
+  }, [session]);
 
   // Calculate progress percentage based on current step
   const calculateProgress = () => {
@@ -91,7 +99,7 @@ export function StoryGenerationProgress({
     try {
       // Call the parent handler if provided
       if (onEmailSubmit) {
-        await onEmailSubmit(email, false);
+        await onEmailSubmit(email);
       }
 
       // Track email submission event with Meta Pixel
@@ -524,7 +532,7 @@ export function StoryGenerationProgress({
                     return;
                   }
 
-                  if (!emailSubmitted) {
+                  if (!emailSubmitted && !session?.user?.email) {
                     setShowUnlockDialog(true);
                   } else {
                     router.push(`/story/${status.storyId}`);
@@ -554,7 +562,7 @@ export function StoryGenerationProgress({
               onEmailSubmit={async (email) => {
                 try {
                   if (onEmailSubmit) {
-                    await onEmailSubmit(email, true);
+                    await onEmailSubmit(email);
                   }
                   setEmailSubmitted(true);
                   setShowUnlockDialog(false);

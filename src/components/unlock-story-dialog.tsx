@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -23,8 +23,15 @@ export function UnlockStoryDialog({
 }: UnlockStoryDialogProps) {
   const router = useRouter();
   const { data: session } = useSession();
-  const [email, setEmail] = React.useState("");
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [email, setEmail] = useState(session?.user?.email || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Update email when session changes
+  useEffect(() => {
+    if (session?.user?.email) {
+      setEmail(session.user.email);
+    }
+  }, [session]);
 
   const handleSubmit = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -97,7 +104,7 @@ export function UnlockStoryDialog({
               disabled={isSubmitting}
               className="w-full h-12 text-base bg-[#9F7AEA] hover:bg-[#805AD5]"
             >
-              View My Story
+              Unlock My Story
             </Button>
           </div>
         </div>

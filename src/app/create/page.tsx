@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   StoryGenerationProgress,
@@ -15,6 +15,8 @@ import {
 import { StoryPlotSection } from "@/components/story-form/Story-plot/story-plot-section";
 import { StoryDetailsSection } from "@/components/story-form/story-details-section";
 import { Stepper } from "@/components/story-form/stepper";
+import { PaywallDialog } from "@/components/paywall-dialog";
+import { usePremiumLimits } from "@/hooks/use-premium-limits";
 
 // Request body interface
 interface StoryRequestBody {
@@ -45,6 +47,12 @@ const fillStoryPlotDescriptionByCharacters = (characters: Character[]) => {
 export default function CreateStoryPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { isPremium, hasReachedMonthlyLimit, isPageCountAllowed } =
+    usePremiumLimits();
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallReason, setPaywallReason] = useState<
+    "story_limit" | "page_limit"
+  >();
   // Create refs for file inputs
   const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>(
     {}
@@ -94,6 +102,24 @@ export default function CreateStoryPage() {
 
   // Add current step state
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Check monthly limit when component mounts
+  useEffect(() => {
+    if (hasReachedMonthlyLimit) {
+      setPaywallReason("story_limit");
+      setShowPaywall(true);
+    }
+  }, [hasReachedMonthlyLimit]);
+
+  // Update page length handler
+  const handlePageLengthChange = (newLength: number) => {
+    if (!isPageCountAllowed(newLength)) {
+      setPaywallReason("page_limit");
+      setShowPaywall(true);
+      return;
+    }
+    setStoryLengthTargetPages(newLength);
+  };
 
   // Form steps - Dynamic based on email presence
   const getFormSteps = () => {
@@ -332,47 +358,50 @@ export default function CreateStoryPage() {
   };
 
   // Handle email collection
-  const handleEmailSubmit = async (email: string, isSubmited: boolean) => {
+  const handleEmailSubmit = async (email: string) => {
     try {
-      // Store email in database
-      // const response = await fetch("/api/store-email", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({
-      //     email,
-      //     storyId: generationStatus.storyId,
-      //   }),
-      // });
+      if (session?.user) {
+        // User already has a session, just check monthly limit
+        if (hasReachedMonthlyLimit) {
+          setPaywallReason("story_limit");
+          setShowPaywall(true);
+          return;
+        }
+      } else {
+        // Sign in with Next-Auth
+        const result = await signIn("credentials", {
+          email,
+          redirect: false,
+        });
 
-      // if (!response.ok) {
-      //   throw new Error("Failed to store email");
-      // }
+        if (!result?.ok) {
+          throw new Error("Failed to sign in");
+        }
+      }
 
-      // // Send confirmation email to user
-      // const emailResponse = await fetch("/api/send-story-email", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({
-      //     email,
-      //     storyId: generationStatus.storyId,
-      //   }),
-      // });
+      // Store story association
+      const response = await fetch("/api/store-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          storyId: generationStatus.storyId,
+        }),
+      });
 
-      // if (!emailResponse.ok) {
-      //   throw new Error("Failed to send email");
-      // }
+      if (!response.ok) {
+        throw new Error("Failed to store story association");
+      }
 
-      // Redirect to story page
-      if (isSubmited) {
+      // Redirect to story page if we have a story ID
+      if (generationStatus.storyId) {
         router.push(`/story/${generationStatus.storyId}`);
       }
-    } catch (error) {
-      console.error("Error handling email submission:", error);
-      setError("Failed to process email. Please try again.");
+    } catch (error: any) {
+      console.error("Error handling email:", error);
+      setError(error.message || "Failed to process email");
     }
   };
 
@@ -858,6 +887,12 @@ export default function CreateStoryPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    if (hasReachedMonthlyLimit) {
+      setPaywallReason("story_limit");
+      setShowPaywall(true);
+      return;
+    }
+
     // Clear previous error
     setError(null);
 
@@ -997,8 +1032,8 @@ export default function CreateStoryPage() {
                   storyStyle={storyStyle}
                   onStoryStyleChange={setStoryStyle}
                   storyLengthTargetPages={storyLengthTargetPages}
-                  onStoryLengthChange={setStoryLengthTargetPages}
-                  isPremium={!!session}
+                  onStoryLengthChange={handlePageLengthChange}
+                  isPremium={isPremium}
                   onGoNext={handleNext}
                 />
               )}
@@ -1034,6 +1069,12 @@ export default function CreateStoryPage() {
               )} */}
             </div>
           )}
+
+          <PaywallDialog
+            open={showPaywall}
+            onOpenChange={setShowPaywall}
+            reason={paywallReason}
+          />
         </form>
       </div>
     </div>
