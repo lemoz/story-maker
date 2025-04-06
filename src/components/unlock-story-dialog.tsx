@@ -48,10 +48,26 @@ export function UnlockStoryDialog({
     try {
       setIsSubmitting(true);
 
-      // Call the parent handler and wait for it to complete
+      // First store the email and create UserStory
+      const storeResponse = await fetch("/api/store-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          storyId,
+        }),
+      });
+
+      if (!storeResponse.ok) {
+        throw new Error("Failed to store email");
+      }
+
+      // Then call the parent handler
       await onEmailSubmit(email);
 
-      // Verificar limite mensal após o login
+      // Check monthly limit after login
       if (hasReachedMonthlyLimit) {
         setShowPaywall(true);
         setIsSubmitting(false);
@@ -60,7 +76,6 @@ export function UnlockStoryDialog({
 
       // Only redirect after email submission is complete and if user has available stories
       if (storyId) {
-        // Fechar o diálogo apenas após o redirecionamento
         onOpenChange(false);
         router.push(`/story/${storyId}`);
       } else {

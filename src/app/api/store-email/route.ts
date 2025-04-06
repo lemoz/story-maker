@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/route";
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const { storyId, email: bodyEmail } = await request.json();
-
-    // Get email from session or request body
-    const email = session?.user?.email || bodyEmail;
+    const { email, storyId } = await request.json();
 
     if (!email || !storyId) {
       return NextResponse.json(
@@ -18,34 +12,41 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get or create user
-    let user = await prisma.user.findUnique({
+    // First, try to find or create the user
+    const user = await prisma.user.upsert({
       where: { email },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email,
-          emailVerified: new Date(),
-        },
-      });
-    }
-
-    // Store story association
-    await prisma.userStory.create({
-      data: {
+      update: {},
+      create: {
         email,
-        storyId,
-        userId: user.id, // Include the user ID in the association
       },
     });
 
-    return NextResponse.json({ success: true });
+    // Then create the UserStory association if it doesn't exist
+    const existingUserStory = await prisma.userStory.findFirst({
+      where: {
+        userId: user.id,
+        storyId: storyId,
+      },
+    });
+
+    let userStory;
+    if (!existingUserStory) {
+      userStory = await prisma.userStory.create({
+        data: {
+          userId: user.id,
+          storyId,
+          email,
+        },
+      });
+    } else {
+      userStory = existingUserStory;
+    }
+
+    return NextResponse.json({ success: true, userStory });
   } catch (error) {
-    console.error("Error storing story association:", error);
+    console.error("Error in store-email:", error);
     return NextResponse.json(
-      { error: "Failed to store story association" },
+      { error: "Failed to store email" },
       { status: 500 }
     );
   }

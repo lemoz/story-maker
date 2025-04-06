@@ -535,26 +535,6 @@ export function StoryGenerationProgress({
                   if (!emailSubmitted && !session?.user?.email) {
                     setShowUnlockDialog(true);
                   } else {
-                    // Store story association before redirecting
-                    try {
-                      const response = await fetch("/api/store-email", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          email: session?.user?.email || email,
-                          storyId: status.storyId,
-                        }),
-                      });
-
-                      if (!response.ok) {
-                        console.error("Failed to store story association");
-                      }
-                    } catch (error) {
-                      console.error("Error storing story association:", error);
-                    }
-
                     router.push(`/story/${status.storyId}`);
                   }
                 }}
