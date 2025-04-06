@@ -45,7 +45,7 @@ export type StoryGenerationStatus = {
 
 type StoryGenerationProgressProps = {
   status: StoryGenerationStatus;
-  onEmailSubmit?: (email: string) => void;
+  onEmailSubmit?: (email: string, shouldRedirect?: boolean) => void;
   characters?: Array<{
     name: string;
     photoPreviewUrl: string | null;
@@ -560,15 +560,15 @@ export function StoryGenerationProgress({
               open={showUnlockDialog}
               onOpenChange={setShowUnlockDialog}
               storyId={status.storyId || ""}
-              onEmailSubmit={async (email) => {
+              onEmailSubmit={async (email, shouldRedirect = true) => {
                 try {
                   if (onEmailSubmit) {
-                    await onEmailSubmit(email);
+                    await onEmailSubmit(email, shouldRedirect);
                   }
                   setEmailSubmitted(true);
                   setShowUnlockDialog(false);
 
-                  if (status.storyId) {
+                  if (status.storyId && shouldRedirect) {
                     router.push(`/story/${status.storyId}`);
                   }
                 } catch (error) {

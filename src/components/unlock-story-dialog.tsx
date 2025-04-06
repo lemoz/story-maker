@@ -14,7 +14,7 @@ type UnlockStoryDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storyId: string;
-  onEmailSubmit: (email: string) => Promise<void>;
+  onEmailSubmit: (email: string, shouldRedirect?: boolean) => Promise<void>;
 };
 
 export function UnlockStoryDialog({
@@ -64,17 +64,17 @@ export function UnlockStoryDialog({
         throw new Error("Failed to store email");
       }
 
-      // Then call the parent handler
-      await onEmailSubmit(email);
+      // Call onEmailSubmit with shouldRedirect = false
+      await onEmailSubmit(email, false);
 
-      // Check monthly limit after login
+      // After login is complete, check monthly limit
       if (hasReachedMonthlyLimit) {
         setShowPaywall(true);
         setIsSubmitting(false);
         return;
       }
 
-      // Only redirect after email submission is complete and if user has available stories
+      // If everything is ok, close dialog and redirect
       if (storyId) {
         onOpenChange(false);
         router.push(`/story/${storyId}`);

@@ -17,6 +17,7 @@ interface StoryDetailsSectionProps {
   onStoryLengthChange: (value: number) => void;
   isPremium: boolean;
   onGoNext: () => void;
+  onGoBack: () => void;
   onShowPaywall?: () => void;
 }
 
@@ -29,6 +30,7 @@ export function StoryDetailsSection({
   onStoryLengthChange,
   isPremium,
   onGoNext,
+  onGoBack,
   onShowPaywall,
 }: StoryDetailsSectionProps) {
   const [sliderValue, setSliderValue] = useState(storyLengthTargetPages);
@@ -160,7 +162,10 @@ export function StoryDetailsSection({
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-between pt-4">
+          <Button type="button" variant="outline" onClick={onGoBack}>
+            Back
+          </Button>
           <Button onClick={onGoNext}>Continue</Button>
         </div>
       </CardContent>

@@ -358,7 +358,7 @@ export default function CreateStoryPage() {
   };
 
   // Handle email collection
-  const handleEmailSubmit = async (email: string) => {
+  const handleEmailSubmit = async (email: string, shouldRedirect = true) => {
     try {
       if (session?.user) {
         // User already has a session, just check monthly limit
@@ -380,7 +380,7 @@ export default function CreateStoryPage() {
       }
 
       // Redirect to story page if we have a story ID
-      if (generationStatus.storyId) {
+      if (generationStatus.storyId && shouldRedirect) {
         router.push(`/story/${generationStatus.storyId}`);
       }
     } catch (error: any) {
@@ -1034,6 +1034,7 @@ export default function CreateStoryPage() {
                   onStoryLengthChange={handlePageLengthChange}
                   isPremium={isPremium}
                   onGoNext={handleNext}
+                  onGoBack={handleBack}
                   onShowPaywall={() => setShowPaywall(true)}
                 />
               )}
