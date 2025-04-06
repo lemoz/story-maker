@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Star, Image, Download, Palette } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type PaywallDialogProps = {
   open: boolean;
@@ -16,6 +17,7 @@ export function PaywallDialog({
   onOpenChange,
   reason,
 }: PaywallDialogProps) {
+  const router = useRouter();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 gap-0 border-none bg-white">
@@ -102,7 +104,7 @@ export function PaywallDialog({
                 className="w-full h-12 text-base bg-[#9F7AEA] hover:bg-[#805AD5]"
                 onClick={() => {
                   // Here you would implement the upgrade logic
-                  console.log("Upgrade to Premium clicked");
+                  router.push("/payment");
                 }}
               >
                 Upgrade to Premium

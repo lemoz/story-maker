@@ -30,6 +30,9 @@ export const authOptions: NextAuthOptions = {
           where: {
             email: credentials.email,
           },
+          include: {
+            subscription: true,
+          },
         });
 
         if (!user) {
@@ -37,6 +40,9 @@ export const authOptions: NextAuthOptions = {
             data: {
               email: credentials.email,
               emailVerified: new Date(),
+            },
+            include: {
+              subscription: true,
             },
           });
         }
@@ -73,10 +79,32 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id as string;
-      session.user.name = token.name;
-      session.user.email = token.email;
-      session.user.image = token.picture as string | null;
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.name = token.name;
+        session.user.email = token.email;
+        session.user.image = token.picture as string | null;
+
+        // Get subscription status
+        if (session.user.email) {
+          const user = await prisma.user.findUnique({
+            where: { email: session.user.email },
+            include: { subscription: true },
+          });
+
+          if (user?.subscription) {
+            const isActive =
+              user.subscription.status === "active" &&
+              user.subscription.stripeCurrentPeriodEnd > new Date();
+
+            session.user.subscription = {
+              status: isActive ? "active" : "inactive",
+              plan: user.subscription.plan,
+              currentPeriodEnd: user.subscription.stripeCurrentPeriodEnd,
+            };
+          }
+        }
+      }
 
       return session;
     },

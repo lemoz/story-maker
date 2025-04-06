@@ -526,7 +526,7 @@ export function StoryGenerationProgress({
               <Button
                 type="button"
                 className="w-full"
-                onClick={() => {
+                onClick={async () => {
                   if (!status.storyId) {
                     console.error("No storyId available for redirection");
                     return;
@@ -535,6 +535,26 @@ export function StoryGenerationProgress({
                   if (!emailSubmitted && !session?.user?.email) {
                     setShowUnlockDialog(true);
                   } else {
+                    // Store story association before redirecting
+                    try {
+                      const response = await fetch("/api/store-email", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          email: session?.user?.email || email,
+                          storyId: status.storyId,
+                        }),
+                      });
+
+                      if (!response.ok) {
+                        console.error("Failed to store story association");
+                      }
+                    } catch (error) {
+                      console.error("Error storing story association:", error);
+                    }
+
                     router.push(`/story/${status.storyId}`);
                   }
                 }}
@@ -542,6 +562,7 @@ export function StoryGenerationProgress({
                 View My Story
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 className="w-full gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
                 onClick={() => {

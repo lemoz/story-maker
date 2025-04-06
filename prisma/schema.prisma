@@ -52,6 +52,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
   userStories   UserStory[]
+  subscription  Subscription?
+  customerId    String?      // Stripe customer ID
 }
 
 model VerificationToken {
@@ -72,4 +74,18 @@ model UserStory {
   userId    String?
 
   @@unique([email, storyId])
+}
+
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String  @unique
+  stripePriceId   String
+  stripeCurrentPeriodEnd DateTime
+  stripeCustomerId String
+  status          String   // 'active', 'canceled', 'past_due', etc.
+  plan            String   // 'monthly', 'annual'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

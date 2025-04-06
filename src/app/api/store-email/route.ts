@@ -6,20 +6,38 @@ import { authOptions } from "../auth/[...nextauth]/route";
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const { storyId } = await request.json();
+    const { storyId, email: bodyEmail } = await request.json();
 
-    if (!session?.user?.email || !storyId) {
+    // Get email from session or request body
+    const email = session?.user?.email || bodyEmail;
+
+    if (!email || !storyId) {
       return NextResponse.json(
         { error: "Email and storyId are required" },
         { status: 400 }
       );
     }
 
+    // Get or create user
+    let user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          emailVerified: new Date(),
+        },
+      });
+    }
+
     // Store story association
     await prisma.userStory.create({
       data: {
-        email: session.user.email,
+        email,
         storyId,
+        userId: user.id, // Include the user ID in the association
       },
     });
 

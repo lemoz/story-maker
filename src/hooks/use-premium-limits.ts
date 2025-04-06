@@ -8,22 +8,37 @@ export function usePremiumLimits() {
   const [monthlyStoryCount, setMonthlyStoryCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
 
-  // Fetch user's story count for the current month
+  // Fetch user's subscription status and story count
   useEffect(() => {
-    async function fetchStoryCount() {
+    async function fetchUserData() {
       if (!session?.user?.email) {
         setIsLoading(false);
         return;
       }
 
       try {
-        const response = await fetch("/api/get-user-story-count");
-        if (!response.ok) {
+        // Fetch subscription status
+        const subscriptionResponse = await fetch(
+          "/api/get-subscription-status"
+        );
+        if (!subscriptionResponse.ok) {
+          throw new Error("Failed to fetch subscription status");
+        }
+        const subscriptionData = await subscriptionResponse.json();
+
+        console.log("subscriptionData", subscriptionData);
+        setIsPremium(subscriptionData.status === "active");
+
+        // Fetch story count
+        const countResponse = await fetch("/api/get-user-story-count");
+        if (!countResponse.ok) {
           throw new Error("Failed to fetch story count");
         }
-        const data = await response.json();
-        setMonthlyStoryCount(data.count);
+        const countData = await countResponse.json();
+        console.log("countData", countData);
+        setMonthlyStoryCount(countData.count);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
@@ -31,14 +46,11 @@ export function usePremiumLimits() {
       }
     }
 
-    fetchStoryCount();
+    fetchUserData();
   }, [session?.user?.email]);
 
-  // Check if user is premium (you would implement your own logic here)
-  const isPremium = session?.user?.email?.endsWith("@premium.com") || false; // Temporary check, replace with your actual premium check
-
   // Check if user has reached the monthly story limit
-  const hasReachedMonthlyLimit = !isPremium && monthlyStoryCount >= 2;
+  const hasReachedMonthlyLimit = !isPremium && monthlyStoryCount >= 3;
 
   // Check if page count is within free tier limit
   const isPageCountAllowed = (pageCount: number) => {

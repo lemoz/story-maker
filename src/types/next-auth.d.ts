@@ -4,6 +4,11 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      subscription?: {
+        status: string;
+        plan: string | null;
+        currentPeriodEnd: Date | null;
+      };
     } & DefaultSession["user"];
   }
 

@@ -379,22 +379,6 @@ export default function CreateStoryPage() {
         }
       }
 
-      // Store story association
-      const response = await fetch("/api/store-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          storyId: generationStatus.storyId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to store story association");
-      }
-
       // Redirect to story page if we have a story ID
       if (generationStatus.storyId) {
         router.push(`/story/${generationStatus.storyId}`);
@@ -654,6 +638,14 @@ export default function CreateStoryPage() {
         );
       }
 
+      if (session?.user?.email) {
+        // User already has a session, just check monthly limit
+        if (hasReachedMonthlyLimit) {
+          setPaywallReason("story_limit");
+          setShowPaywall(true);
+          return;
+        }
+      }
       // Get the readable stream from the response
       const reader = streamResponse.body?.getReader();
 
@@ -893,6 +885,13 @@ export default function CreateStoryPage() {
       return;
     }
 
+    // Verificar limite de páginas
+    if (!isPageCountAllowed(storyLengthTargetPages)) {
+      setPaywallReason("page_limit");
+      setShowPaywall(true);
+      return;
+    }
+
     // Clear previous error
     setError(null);
 
@@ -1035,6 +1034,7 @@ export default function CreateStoryPage() {
                   onStoryLengthChange={handlePageLengthChange}
                   isPremium={isPremium}
                   onGoNext={handleNext}
+                  onShowPaywall={() => setShowPaywall(true)}
                 />
               )}
 
