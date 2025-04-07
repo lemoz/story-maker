@@ -239,10 +239,10 @@ export default function StoryViewerPage() {
   };
 
   const handleDownloadPDF = async () => {
-    // if (!isPremium) {
-    //   setPaywallModalOpen(true);
-    //   return;
-    // }
+    if (!isPremium) {
+      setPaywallModalOpen(true);
+      return;
+    }
 
     try {
       setIsDownloadingPDF(true);
