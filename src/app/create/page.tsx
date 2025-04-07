@@ -16,6 +16,7 @@ import { StoryPlotSection } from "@/components/story-form/Story-plot/story-plot-
 import { StoryDetailsSection } from "@/components/story-form/story-details-section";
 import { Stepper } from "@/components/story-form/stepper";
 import { PaywallDialog } from "@/components/paywall-dialog";
+import { ConsentDialog } from "@/components/consent-dialog";
 import { usePremiumLimits } from "@/hooks/use-premium-limits";
 
 // Request body interface
@@ -50,6 +51,7 @@ export default function CreateStoryPage() {
   const { isPremium, hasReachedMonthlyLimit, isPageCountAllowed } =
     usePremiumLimits();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const [paywallReason, setPaywallReason] = useState<
     "story_limit" | "page_limit"
   >();
@@ -110,6 +112,33 @@ export default function CreateStoryPage() {
       setShowPaywall(true);
     }
   }, [hasReachedMonthlyLimit]);
+
+  // Check if user needs to show consent dialog
+  useEffect(() => {
+    async function checkConsent() {
+      if (!session?.user?.email) return;
+
+      try {
+        const response = await fetch("/api/get-user", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (!data.user.hasAcceptedTerms) {
+            setShowConsent(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking user consent:", error);
+      }
+    }
+
+    checkConsent();
+  }, [session?.user?.email]);
 
   // Update page length handler
   const handlePageLengthChange = (newLength: number) => {
@@ -979,6 +1008,29 @@ export default function CreateStoryPage() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
+  // Handle consent submission
+  const handleConsent = async (data: {
+    terms: boolean;
+    marketing: boolean;
+  }) => {
+    try {
+      const response = await fetch("/api/save-consent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save consent");
+      }
+    } catch (error) {
+      console.error("Error saving consent:", error);
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F8FF] to-white">
       <div className="container mx-auto h-screen sm:py-10 px-4 flex flex-row items-start justify-center">
@@ -1075,6 +1127,12 @@ export default function CreateStoryPage() {
             open={showPaywall}
             onOpenChange={setShowPaywall}
             reason={paywallReason}
+          />
+
+          <ConsentDialog
+            open={showConsent}
+            onOpenChange={setShowConsent}
+            onConsent={handleConsent}
           />
         </form>
       </div>
