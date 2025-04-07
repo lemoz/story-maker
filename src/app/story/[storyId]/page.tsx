@@ -33,6 +33,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { jsPDF } from "jspdf";
+import { usePremiumLimits } from "@/hooks/use-premium-limits";
+import { PaywallDialog } from "@/components/paywall-dialog";
 
 // Story data interfaces
 interface StoryPage {
@@ -70,6 +73,9 @@ export default function StoryViewerPage() {
   const [showImageRegenDialog, setShowImageRegenDialog] = useState(false);
   const [imageRegenComment, setImageRegenComment] = useState("");
   const router = useRouter();
+  const { isPremium } = usePremiumLimits();
+  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
 
   // Fetch story data
   useEffect(() => {
@@ -232,6 +238,114 @@ export default function StoryViewerPage() {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    // if (!isPremium) {
+    //   setPaywallModalOpen(true);
+    //   return;
+    // }
+
+    try {
+      setIsDownloadingPDF(true);
+      // Create a new jsPDF instance
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      if (!storyData) return;
+
+      // Set fonts (using default fonts since custom fonts require additional setup)
+      pdf.setFont("helvetica"); // For title
+
+      // Function to add a page to the PDF
+      const addPageToPDF = async (page: StoryPage, index: number) => {
+        if (index > 0) {
+          pdf.addPage();
+        }
+
+        const pageWidth = pdf.internal.pageSize.width;
+        const pageHeight = pdf.internal.pageSize.height;
+        const margin = 20; // 20mm margins
+        const contentWidth = pageWidth - 2 * margin;
+        const imageHeight = 120; // Fixed image height in mm
+
+        // Add the title on the first page
+        if (index === 0) {
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor("#A78BFA"); // Purple color for title
+          pdf.setFontSize(24);
+          const titleLines = pdf.splitTextToSize(storyData.title, contentWidth);
+          pdf.text(titleLines, pageWidth / 2, margin + 10, { align: "center" });
+        }
+
+        // Convert image to canvas
+        if (page.imageUrl) {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = page.imageUrl;
+
+          await new Promise((resolve) => {
+            img.onload = resolve;
+          });
+
+          // Add image with rounded corners (simulated by positioning)
+          const imageX = margin;
+          const imageY = index === 0 ? margin + 30 : margin; // Extra space on first page for title
+          pdf.addImage(
+            img,
+            "JPEG",
+            imageX,
+            imageY,
+            contentWidth,
+            imageHeight,
+            undefined,
+            "MEDIUM"
+          );
+        }
+
+        // Add text below the image
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(12);
+        pdf.setTextColor("#333333"); // Dark gray for better readability
+
+        const textY = index === 0 ? margin + 160 : margin + 130; // Position text below image
+        const textLines = pdf.splitTextToSize(page.text, contentWidth);
+
+        // Add some line spacing
+        const lineHeight = 7;
+        textLines.forEach((line: string, i: number) => {
+          pdf.text(line, pageWidth / 2, textY + i * lineHeight, {
+            align: "center",
+          });
+        });
+
+        // Add page number at bottom
+        pdf.setFontSize(10);
+        pdf.setTextColor("#666666"); // Light gray for page number
+        pdf.text(
+          `Storymaker • Page ${index + 1}`,
+          pageWidth / 2,
+          pageHeight - margin,
+          { align: "center" }
+        );
+      };
+
+      // Process each page
+      for (let i = 0; i < storyData.pages.length; i++) {
+        await addPageToPDF(storyData.pages[i], i);
+      }
+
+      // Save the PDF with the story title
+      pdf.save(`${storyData.title}.pdf`);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      toast.error("Failed to download PDF. Please try again.");
+    } finally {
+      setIsDownloadingPDF(false);
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -318,8 +432,21 @@ export default function StoryViewerPage() {
           >
             <Plus className="h-4 w-4" /> Create Another
           </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" /> Download PDF
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleDownloadPDF}
+            disabled={isDownloadingPDF}
+          >
+            {isDownloadingPDF ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Downloading...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" /> Download PDF
+              </>
+            )}
           </Button>
           <Button variant="outline" className="gap-2" onClick={handleShare}>
             {shareStatus === "copied" ? (
@@ -461,6 +588,11 @@ export default function StoryViewerPage() {
             </div>
           </CardContent>
         </Card>
+
+        <PaywallDialog
+          open={paywallModalOpen}
+          onOpenChange={setPaywallModalOpen}
+        />
 
         {/* Image Regeneration Dialog */}
         <Dialog
