@@ -46,6 +46,12 @@ export default function HomePage() {
               >
                 Create Story
               </Button>
+              <Button
+                onClick={() => (window.location.href = "/list-stories")}
+                className="font-medium px-6 py-2 text-base rounded-full bg-purple-600 hover:bg-purple-700 border-0 shadow-lg hover:shadow-xl transition-all"
+              >
+                My Stories
+              </Button>
             </div>
           ) : (
             <Button
