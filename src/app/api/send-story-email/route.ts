@@ -21,7 +21,6 @@ export async function POST(request: Request) {
 
     // Get email from session or request body
     const email = session?.user?.email || body.email;
-
     // Validate input
     if (!storyId) {
       return NextResponse.json(
@@ -77,26 +76,36 @@ export async function POST(request: Request) {
     const msg = {
       to: userEmail,
       from: process.env.SENDGRID_FROM_EMAIL,
-      templateId: process.env.SENDGRID_TEMPLATE_ID,
-      dynamicTemplateData: {
-        storyTitle: story.title,
-        characterNames: story.characters
-          .map((char: Character) => char.name)
-          .join(", "),
-        storyPages: story.pages.map((page: StoryPage, index: number) => ({
-          pageNumber: index + 1,
-          imageUrl: page.imageUrl || "",
-          text: page.text,
-        })),
-        storyLink: `${process.env.NEXT_PUBLIC_APP_URL}/story/${storyId}`,
-        userName: userEmail.split("@")[0],
-      },
-    };
+      subject: `Your Story "${story.title}" is Ready!`,
+      html: `<meta charset="UTF-8">
+<title>Your Story is Ready!</title>
 
-    // Send email
+<div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
+  
+  <h1 style="color: #7A5CFA;">Hello, ${userEmail.split("@")[0]}! 🌟</h1>
+
+  <p style="font-size: 18px;">Your story "<strong>${
+    story.title
+  }</strong>" has been generated!</p>
+
+  <p style="font-size: 16px; color: #666;">Featuring: ${story.characters
+    .map((char: Character) => char.name)
+    .join(", ")}</p>
+
+  <a href="${
+    process.env.NEXT_PUBLIC_APP_URL
+  }/story/${storyId}" style="display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #7A5CFA; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px;">
+    Read Your Story
+  </a>
+
+  <p style="margin-top: 30px; font-size: 12px; color: #999;">
+    Thank you for using My Hero Story Time! ✨
+  </p>
+
+</div>`,
+    };
+    // Send the email
     await sgMail.send(msg);
-    // For now, we'll just return a success message
-    console.log(`Sending story ${storyId} to email ${userEmail}`);
 
     return NextResponse.json(
       {
@@ -107,7 +116,7 @@ export async function POST(request: Request) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error sending story email:", error);
+    console.error("Error in send-story-email route:", error);
     return NextResponse.json(
       { error: "Failed to send story email" },
       { status: 500 }

@@ -64,8 +64,21 @@ export function UnlockStoryDialog({
         throw new Error("Failed to store email");
       }
 
-      // Call onEmailSubmit with shouldRedirect = false
-      await onEmailSubmit(email, false);
+      // Send the story email
+      const sendEmailResponse = await fetch("/api/send-story-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          storyId,
+          email,
+        }),
+      });
+
+      if (!sendEmailResponse.ok) {
+        console.error("Failed to send story email");
+      }
 
       // After login is complete, check monthly limit
       if (hasReachedMonthlyLimit) {

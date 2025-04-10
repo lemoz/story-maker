@@ -71,6 +71,44 @@ export function StoryGenerationProgress({
     }
   }, [session]);
 
+  useEffect(() => {
+    if (status.step === "complete" && status.storyId && emailSubmitted) {
+      const sendEmail = async () => {
+        try {
+          await fetch("/api/store-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              storyId: status.storyId,
+              email,
+            }),
+          });
+
+          const sendEmailResponse = await fetch("/api/send-story-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              storyId: status.storyId,
+              email,
+            }),
+          });
+
+          if (!sendEmailResponse.ok) {
+            const errorData = await sendEmailResponse.json();
+            console.error("Failed to send story email:", errorData);
+          }
+        } catch (error) {
+          console.error("Error sending email:", error);
+        }
+      };
+      sendEmail();
+    }
+  }, [status, emailSubmitted]);
+
   // Calculate progress percentage based on current step
   const calculateProgress = () => {
     if (status.step === "error") return 100; // Full bar but in red
@@ -108,7 +146,6 @@ export function StoryGenerationProgress({
           content_name: "story_generation_email",
           content_category: "story_creation",
         });
-        console.log("Meta Pixel: Tracked Lead event for email collection");
       }
 
       setEmailSubmitted(true);
@@ -185,26 +222,16 @@ export function StoryGenerationProgress({
   };
 
   // Debug logs to check if preview URLs are reaching the component
-  console.log("Progress Component Status Prop:", status);
   if (status.step === "illustrating" && status.illustrationProgress) {
     const previewUrl =
       status.illustrationProgress.previewUrls?.[
         status.illustrationProgress.current
       ];
-    console.log(
-      "Illustrating - Preview URL Received by Component:",
-      previewUrl
-    );
 
     // Check if the URL is a valid data URL
     if (previewUrl) {
       if (previewUrl.startsWith("data:image/")) {
-        console.log("Preview URL is a valid data URL");
-        // Optionally check length to see if it's truncated
-        console.log("Preview URL length:", previewUrl.length);
       } else if (previewUrl.startsWith("http")) {
-        console.log("Preview URL is a valid HTTP URL");
-        // We could add an image loader here to verify the URL works
         const img = new Image();
         img.onload = () => console.log("✅ Preview image loaded successfully");
         img.onerror = (err) =>
@@ -540,20 +567,6 @@ export function StoryGenerationProgress({
                 }}
               >
                 View My Story
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2 text-white bg-[#9F7AEA] hover:bg-[#805AD5]"
-                onClick={() => {
-                  if (email) {
-                    router.push(`/create`);
-                  } else {
-                    router.push("/create");
-                  }
-                }}
-              >
-                Create Another Story
               </Button>
             </div>
             <UnlockStoryDialog
