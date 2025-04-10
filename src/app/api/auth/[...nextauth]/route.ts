@@ -22,41 +22,47 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials, req) {
         if (!credentials?.email) {
+          console.log("No email provided");
           return null;
         }
 
-        // Find or create user
-        let user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email,
-          },
-          include: {
-            subscription: true,
-          },
-        });
-
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
+        try {
+          // Find or create user
+          let user = await prisma.user.findUnique({
+            where: {
               email: credentials.email,
-              emailVerified: new Date(),
             },
             include: {
               subscription: true,
             },
           });
-        }
 
-        if (!user.email) {
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email: credentials.email,
+                emailVerified: new Date(),
+              },
+              include: {
+                subscription: true,
+              },
+            });
+          }
+
+          if (!user.email) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name || null,
+            image: user.image || null,
+          };
+        } catch (error) {
+          console.error("Error in authorize:", error);
           return null;
         }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name || null,
-          image: user.image || null,
-        };
       },
     }),
     GoogleProvider({
