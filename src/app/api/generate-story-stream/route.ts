@@ -5,6 +5,7 @@ import { createClient } from "redis";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
+import { Character } from "@/components/story-form/Story-characters/characters-section";
 
 // Character schema
 const characterSchema = z.object({
@@ -14,6 +15,9 @@ const characterSchema = z.object({
   gender: z.enum(["female", "male", "unspecified"]).default("unspecified"),
   uploadedPhotoUrl: z.string().url().optional().nullable(),
 });
+
+// Type for characters stored in Redis
+type RedisCharacter = z.infer<typeof characterSchema>;
 
 // Input validation schema
 const storyInputSchema = z.object({
@@ -46,6 +50,7 @@ interface StoryData {
   subtitle: string;
   createdAt: string;
   pages: StoryPage[];
+  characters: RedisCharacter[]; // Use RedisCharacter type
 }
 
 // Helper function to safely close the controller
@@ -423,6 +428,13 @@ export async function POST(request: NextRequest) {
               subtitle,
               createdAt: new Date().toISOString(),
               pages: pagesData,
+              characters: storyInput.characters.map((char) => ({
+                id: char.id,
+                name: char.name,
+                isMain: char.isMain,
+                gender: char.gender,
+                uploadedPhotoUrl: char.uploadedPhotoUrl,
+              })), // Map to RedisCharacter type
             };
 
             // 5. Convert to JSON and store in Redis
