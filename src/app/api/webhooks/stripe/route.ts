@@ -1,3 +1,25 @@
+/**
+ * API Route: /api/webhooks/stripe
+ *
+ * Handles Stripe webhook events to keep subscription status in sync.
+ * This route processes various Stripe events to update the database.
+ *
+ * Events Handled:
+ * - checkout.session.completed: Initial subscription creation
+ * - invoice.payment_succeeded: Successful payment for subscription
+ * - customer.subscription.deleted: Subscription cancellation
+ *
+ * Security:
+ * - Verifies Stripe signature for webhook authenticity
+ *
+ * Response:
+ * - received: boolean - Confirmation of webhook processing
+ *
+ * Error Response:
+ * - error: string - Error message
+ * - status: 400/500 - Bad request or internal server error
+ */
+
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
@@ -17,21 +39,26 @@ export async function POST(request: Request) {
       process.env.STRIPE_WEBHOOK_SECRET!
     );
   } catch (error: any) {
+    console.error("Webhook signature verification failed:", error);
     return NextResponse.json(
       { error: `Webhook Error: ${error.message}` },
       { status: 400 }
     );
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
-
   try {
     switch (event.type) {
-      case "checkout.session.completed":
-        // Retrieve the subscription details from Stripe
-        const subscription = (await stripe.subscriptions.retrieve(
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const subscription = await stripe.subscriptions.retrieve(
           session.subscription as string
-        )) as unknown as Stripe.Response<Stripe.Subscription>;
+        );
+
+        // Get the user ID from the subscription metadata
+        const userId = subscription.metadata.userId;
+        if (!userId) {
+          throw new Error("No user ID found in subscription metadata");
+        }
 
         // Update or create subscription in database
         await prisma.subscription.upsert({
@@ -40,57 +67,84 @@ export async function POST(request: Request) {
           },
           create: {
             stripeSubscriptionId: subscription.id,
-            userId: session.metadata?.userId!,
+            userId: userId,
             stripePriceId: subscription.items.data[0].price.id,
             stripeCurrentPeriodEnd: new Date(
-              (subscription as any).current_period_end * 1000
+              (subscription as unknown as { current_period_end: number })
+                .current_period_end * 1000
             ),
             stripeCustomerId: subscription.customer as string,
             status: subscription.status,
-            plan: session.metadata?.plan || "monthly",
+            plan: subscription.items.data[0].price.lookup_key || "monthly",
           },
           update: {
             stripePriceId: subscription.items.data[0].price.id,
             stripeCurrentPeriodEnd: new Date(
-              (subscription as any).current_period_end * 1000
+              (subscription as unknown as { current_period_end: number })
+                .current_period_end * 1000
             ),
             status: subscription.status,
           },
         });
         break;
+      }
 
-      case "invoice.payment_succeeded":
-        // Retrieve the subscription details from Stripe
-        const paidSubscription = (await stripe.subscriptions.retrieve(
-          session.subscription as string
-        )) as unknown as Stripe.Response<Stripe.Subscription>;
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = (invoice as unknown as { subscription: string })
+          .subscription;
+        if (subscriptionId) {
+          const subscription = await stripe.subscriptions.retrieve(
+            subscriptionId
+          );
 
-        // Update the subscription in database
+          await prisma.subscription.update({
+            where: {
+              stripeSubscriptionId: subscription.id,
+            },
+            data: {
+              stripePriceId: subscription.items.data[0].price.id,
+              stripeCurrentPeriodEnd: new Date(
+                (subscription as unknown as { current_period_end: number })
+                  .current_period_end * 1000
+              ),
+              status: subscription.status,
+            },
+          });
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
         await prisma.subscription.update({
           where: {
-            stripeSubscriptionId: paidSubscription.id,
+            stripeSubscriptionId: subscription.id,
           },
           data: {
-            stripePriceId: paidSubscription.items.data[0].price.id,
+            stripePriceId: subscription.items.data[0].price.id,
             stripeCurrentPeriodEnd: new Date(
-              (paidSubscription as any).current_period_end * 1000
+              (subscription as unknown as { current_period_end: number })
+                .current_period_end * 1000
             ),
-            status: paidSubscription.status,
+            status: subscription.status,
           },
         });
         break;
+      }
 
-      case "customer.subscription.deleted":
-        // Update the subscription status in database
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
         await prisma.subscription.update({
           where: {
-            stripeSubscriptionId: session.subscription as string,
+            stripeSubscriptionId: subscription.id,
           },
           data: {
             status: "canceled",
           },
         });
         break;
+      }
     }
 
     return NextResponse.json({ received: true });

@@ -111,3 +111,7 @@ To verify if everything is configured correctly:
 - Verify the redirect URIs are configured correctly
 - Confirm the credentials (Client ID and Secret) are correct in the `.env` file
 - Verify the application domain is authorized in the developer consoles
+
+### To access db by docker compose
+
+`docker exec -it story_maker_db psql -U story_maker -d story_maker`

@@ -5,23 +5,23 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import {
   Star,
   Clock,
-  Users,
   Download,
   Paintbrush,
   Menu,
   ArrowLeft,
 } from "lucide-react";
 import { z } from "zod";
+import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 // Initialize Stripe
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUB_KEY!, {
+  locale: "en",
+});
 
 // Zod schema for card validation
 const cardSchema = z.object({
@@ -41,7 +41,8 @@ const cardSchema = z.object({
     }, "Card has expired"),
   cvc: z
     .string()
-    .length(3, "CVC must be 3 digits")
+    .min(3, "CVC must be at least 3 digits")
+    .max(6, "CVC must be at most 6 digits")
     .regex(/^[0-9]+$/, "CVC must contain only numbers"),
 });
 
@@ -55,23 +56,18 @@ export default function PaymentPage() {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paymentDetails, setPaymentDetails] = useState({
-    cardNumber: "",
-    expiry: "",
-    cvc: "",
-  });
   const [errors, setErrors] = useState<Partial<CardFormData>>({});
 
   const plans = {
     monthly: {
       price: "$7.99",
       period: "month",
-      priceId: process.env.NEXT_PUBLIC_STRIPE_MONTHLY_PRICE_ID,
+      priceId: process.env.NEXT_PUBLIC_STRIPE_MONTHLY_PRICE_ID!,
     },
     annual: {
       price: "$59.99",
       period: "year",
-      priceId: process.env.NEXT_PUBLIC_STRIPE_ANNUAL_PRICE_ID,
+      priceId: process.env.NEXT_PUBLIC_STRIPE_ANNUAL_PRICE_ID!,
       savings: "Save 37%",
     },
   };
@@ -115,7 +111,7 @@ export default function PaymentPage() {
     }
 
     if (parts.length) {
-      return parts.join(" ");
+      return parts.join("");
     } else {
       return value;
     }
@@ -132,6 +128,7 @@ export default function PaymentPage() {
 
   const handleInputChange = (field: keyof CardFormData, value: string) => {
     let formattedValue = value;
+    console.log("Formatted value:", formattedValue);
 
     if (field === "cardNumber") {
       formattedValue = formatCardNumber(value);
@@ -139,7 +136,7 @@ export default function PaymentPage() {
       formattedValue = formatExpiry(value);
     }
 
-    setPaymentDetails((prev) => ({
+    setErrors((prev) => ({
       ...prev,
       [field]: formattedValue,
     }));
@@ -155,8 +152,7 @@ export default function PaymentPage() {
 
   const validateForm = (): boolean => {
     try {
-      cardSchema.parse(paymentDetails);
-      setErrors({});
+      cardSchema.parse(errors);
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -176,150 +172,27 @@ export default function PaymentPage() {
     setShowPaymentForm(true);
   };
 
-  const handlePaymentSubmit = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-
-      // Create a checkout session
-      const response = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          priceId: plans[selectedPlan].priceId,
-          plan: selectedPlan,
-        }),
-      });
-
-      const { sessionId } = await response.json();
-
-      // Redirect to Stripe Checkout
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error("Failed to load Stripe");
-
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (showPaymentForm) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#9F7AEA]/10 to-white py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-md mx-auto">
-            <button
-              onClick={() => setShowPaymentForm(false)}
-              className="flex items-center text-[#805AD5] mb-8 hover:text-[#9F7AEA] transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to plans
-            </button>
-
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold mb-4">Subscribe</h1>
-              <p className="text-gray-600">
-                Enter your payment information to subscribe to the Premium plan.
-              </p>
-            </div>
-
-            <Card className="p-8">
-              <h2 className="text-xl font-bold mb-6">Payment Details</h2>
-
-              <div className="space-y-4">
-                <div>
-                  <Input
-                    type="text"
-                    placeholder="Card number"
-                    value={paymentDetails.cardNumber}
-                    onChange={(e) =>
-                      handleInputChange("cardNumber", e.target.value)
-                    }
-                    maxLength={19}
-                    className={`w-full ${
-                      errors.cardNumber ? "border-red-500" : ""
-                    }`}
-                  />
-                  {errors.cardNumber && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.cardNumber}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Input
-                      type="text"
-                      placeholder="MM/YY"
-                      value={paymentDetails.expiry}
-                      onChange={(e) =>
-                        handleInputChange("expiry", e.target.value)
-                      }
-                      maxLength={5}
-                      className={errors.expiry ? "border-red-500" : ""}
-                    />
-                    {errors.expiry && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.expiry}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <Input
-                      type="text"
-                      placeholder="CVC"
-                      value={paymentDetails.cvc}
-                      onChange={(e) => handleInputChange("cvc", e.target.value)}
-                      maxLength={3}
-                      className={errors.cvc ? "border-red-500" : ""}
-                    />
-                    {errors.cvc && (
-                      <p className="text-red-500 text-sm mt-1">{errors.cvc}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* <div>
-                  <Input
-                    type="text"
-                    placeholder="Name on card"
-                    value={paymentDetails.name}
-                    onChange={(e) =>
-                      setPaymentDetails({
-                        ...paymentDetails,
-                        name: e.target.value,
-                      })
-                    }
-                    className="w-full"
-                  />
-                </div> */}
-
-                <Button
-                  type="button"
-                  onClick={handlePaymentSubmit}
-                  className="w-full py-6 text-lg bg-[#9F7AEA] hover:bg-[#805AD5] text-white"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Processing..." : "Subscribe"}
-                </Button>
-
-                {/* <div className="mt-4 text-center text-sm text-gray-500">
-                  Powered by <span className="font-semibold">stripe</span>
-                </div> */}
-              </div>
-            </Card>
-          </div>
-        </div>
-      </div>
+      <Elements
+        stripe={stripePromise}
+        options={{
+          appearance: {
+            labels: "above",
+            variables: {
+              colorText: "#424770",
+              fontFamily: "system-ui, sans-serif",
+            },
+          },
+        }}
+      >
+        <PaymentForm
+          onBack={() => setShowPaymentForm(false)}
+          onSuccess={() => router.push("/success")}
+          plan={plans[selectedPlan]}
+          email={session?.user?.email || ""}
+        />
+      </Elements>
     );
   }
 
@@ -407,10 +280,154 @@ export default function PaymentPage() {
             >
               {isLoading ? "Processing..." : "Subscribe"}
             </Button>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            {/* <div className="mt-4 text-center text-sm text-gray-500">
-              Powered by <span className="font-semibold">stripe</span>
-            </div> */}
+/**
+ * PaymentForm Component
+ *
+ * Handles the direct payment flow with Stripe:
+ * 1. Collects card details using Stripe Elements
+ * 2. Creates a payment method
+ * 3. Creates a customer with the payment method
+ * 4. Creates a subscription
+ * 5. Confirms the payment
+ *
+ * Props:
+ * - onBack: () => void - Function to go back to plan selection
+ * - onSuccess: () => void - Function to handle successful payment
+ * - plan: { priceId: string } - Selected plan details
+ * - email: string - User's email
+ */
+function PaymentForm({
+  onBack,
+  onSuccess,
+  plan,
+  email,
+}: {
+  onBack: () => void;
+  onSuccess: () => void;
+  plan: { priceId: string };
+  email: string;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ cardNumber?: string }>({});
+
+  const handlePaymentSubmit = async () => {
+    if (!stripe || !elements) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Step 1: Create a setup intent and subscription
+      const response = await fetch("/api/create-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          priceId: plan.priceId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create subscription");
+      }
+
+      const { clientSecret, subscriptionId } = await response.json();
+
+      // Step 2: Confirm the setup
+      const { error: setupError } = await stripe.confirmCardSetup(
+        clientSecret,
+        {
+          payment_method: {
+            card: elements.getElement(CardElement)!,
+          },
+        }
+      );
+
+      if (setupError) {
+        throw new Error(setupError.message);
+      }
+
+      // Step 3: Payment successful
+      onSuccess();
+    } catch (error) {
+      console.error("Error:", error);
+      setErrors({
+        cardNumber:
+          error instanceof Error ? error.message : "An error occurred",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#9F7AEA]/10 to-white py-12">
+      <div className="container mx-auto px-4">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={onBack}
+            className="flex items-center text-[#805AD5] mb-8 hover:text-[#9F7AEA] transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to plans
+          </button>
+
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold mb-4">Subscribe</h1>
+            <p className="text-gray-600">
+              Enter your payment information to subscribe to the Premium plan.
+            </p>
+          </div>
+
+          <Card className="p-8">
+            <h2 className="text-xl font-bold mb-6">Payment Details</h2>
+
+            <div className="space-y-4">
+              <div className="border p-4 rounded">
+                <CardElement
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: "16px",
+                        color: "#424770",
+                        "::placeholder": {
+                          color: "#aab7c4",
+                        },
+                      },
+                      invalid: {
+                        color: "#9e2146",
+                      },
+                    },
+                    hidePostalCode: true,
+                  }}
+                />
+              </div>
+
+              {errors.cardNumber && (
+                <p className="text-red-500 text-sm mt-1">{errors.cardNumber}</p>
+              )}
+
+              <Button
+                type="button"
+                onClick={handlePaymentSubmit}
+                className="w-full py-6 text-lg bg-[#9F7AEA] hover:bg-[#805AD5] text-white"
+                disabled={isLoading || !stripe}
+              >
+                {isLoading ? "Processing..." : "Subscribe"}
+              </Button>
+            </div>
           </Card>
         </div>
       </div>
