@@ -28,18 +28,18 @@ export async function GET() {
     // Check if subscription exists and is active
     const isActive =
       user.subscription?.status === "active" &&
-      user.subscription?.stripeCurrentPeriodEnd > new Date();
+      user.subscription?.endDate > new Date();
 
     console.log({
       status: isActive ? "active" : "inactive",
       plan: user.subscription?.plan || null,
-      currentPeriodEnd: user.subscription?.stripeCurrentPeriodEnd || null,
+      endDate: user.subscription?.endDate || null,
     });
 
     return NextResponse.json({
       status: isActive ? "active" : "inactive",
       plan: user.subscription?.plan || null,
-      currentPeriodEnd: user.subscription?.stripeCurrentPeriodEnd || null,
+      endDate: user.subscription?.endDate || null,
     });
   } catch (error) {
     console.error("Error getting subscription status:", error);

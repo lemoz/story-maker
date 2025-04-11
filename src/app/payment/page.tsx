@@ -346,20 +346,25 @@ function PaymentForm({
       const { clientSecret, subscriptionId } = await response.json();
 
       // Step 2: Confirm the setup
-      const { error: setupError } = await stripe.confirmCardSetup(
-        clientSecret,
-        {
+      const { error: setupError, paymentIntent } =
+        await stripe.confirmCardPayment(clientSecret, {
           payment_method: {
             card: elements.getElement(CardElement)!,
           },
-        }
-      );
+        });
+
+      console.log("Payment intent:", paymentIntent);
 
       if (setupError) {
+        console.log("Setup error:", setupError);
         throw new Error(setupError.message);
       }
 
-      // Step 3: Payment successful
+      if (!paymentIntent.payment_method) {
+        throw new Error("No payment method returned");
+      }
+
+      // Step 4: Payment successful
       onSuccess();
     } catch (error) {
       console.error("Error:", error);

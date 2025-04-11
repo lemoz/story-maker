@@ -80,15 +80,17 @@ model UserStory {
 }
 
 model Subscription {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stripeSubscriptionId String  @unique
-  stripePriceId   String
-  stripeCurrentPeriodEnd DateTime
-  stripeCustomerId String
-  status          String   // 'active', 'canceled', 'past_due', etc.
-  plan            String   // 'monthly', 'annual'
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String    @unique
+  stripeCustomerId     String
+  stripePriceId        String
+  status               String    // 'incomplete', 'incomplete_expired', 'trialing', 'active', 'past_due', 'canceled', 'unpaid'
+  plan                 String    // 'monthly' or 'annual'
+  startDate            DateTime  // subscription start date
+  endDate             DateTime  // calculated based on plan interval
+  canceledAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }

@@ -29,7 +29,7 @@ import { authOptions } from "../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-03-31.basil",
+  apiVersion: "2024-06-20",
 });
 
 export async function POST(request: Request) {
@@ -73,15 +73,7 @@ export async function POST(request: Request) {
       customerId = newCustomer.id;
     }
 
-    // Step 2: Create a SetupIntent
-    console.log("Creating setup intent...");
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      payment_method_types: ["card"],
-      usage: "off_session",
-    });
-
-    // Step 3: Create the subscription
+    // Step 2: Create the subscription
     console.log("Creating subscription...");
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
@@ -89,17 +81,17 @@ export async function POST(request: Request) {
       payment_behavior: "default_incomplete",
       payment_settings: {
         save_default_payment_method: "on_subscription",
-        payment_method_types: ["card"],
       },
+      expand: ["latest_invoice.payment_intent"],
       metadata: {
         userId: user.id,
       },
     });
 
-    console.log("Subscription flow completed successfully");
+    // return to frontend the subscription ID and the PaymentIntent.client_secret
     return NextResponse.json({
       subscriptionId: subscription.id,
-      clientSecret: setupIntent.client_secret,
+      clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
     });
   } catch (error) {
     console.error("Error in subscription creation:", error);
