@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     .join(", ")}</p>
 
   <a href="${
-    process.env.NEXT_PUBLIC_APP_URL
+    process.env.NEXTAUTH_URL
   }/story/${storyId}" style="display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #7A5CFA; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px;">
     Read Your Story
   </a>
