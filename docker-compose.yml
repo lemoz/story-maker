@@ -1,0 +1,16 @@
+services:
+  story_maker_db:
+    image: postgres:latest
+    container_name: story_maker_db
+    environment:
+      POSTGRES_USER: story_maker
+      POSTGRES_PASSWORD: story_maker_password
+      POSTGRES_DB: story_maker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

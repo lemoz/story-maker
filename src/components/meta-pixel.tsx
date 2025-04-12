@@ -1,42 +1,54 @@
-'use client'
+"use client";
 
-import { useEffect } from 'react'
-import Script from "next/script"
-import { usePathname, useSearchParams } from "next/navigation"
+import { useEffect, Suspense } from "react";
+import Script from "next/script";
+import { usePathname, useSearchParams } from "next/navigation";
 
 // Meta Pixel ID
-const FB_PIXEL_ID = '590024414092578'
+const FB_PIXEL_ID = "590024414092578";
 
 // Helper function to track Facebook events
-export const trackFBEvent = (eventName: string, params?: Record<string, any>) => {
-  if (typeof window !== 'undefined' && window.fbq) {
+export const trackFBEvent = (
+  eventName: string,
+  params?: Record<string, any>
+) => {
+  if (typeof window !== "undefined" && window.fbq) {
     // For standard events use track, for custom events use trackCustom
     if (
-      ['PageView', 'Lead', 'CompleteRegistration', 'Contact', 'InitiateCheckout', 'Purchase'].includes(eventName)
+      [
+        "PageView",
+        "Lead",
+        "CompleteRegistration",
+        "Contact",
+        "InitiateCheckout",
+        "Purchase",
+      ].includes(eventName)
     ) {
-      window.fbq('track', eventName, params);
+      window.fbq("track", eventName, params);
     } else {
-      window.fbq('trackCustom', eventName, params);
+      window.fbq("trackCustom", eventName, params);
     }
     console.log(`Meta Pixel: Tracked event "${eventName}"`, params);
   } else {
-    console.warn(`Meta Pixel: Unable to track "${eventName}" - fbq not available`);
+    console.warn(
+      `Meta Pixel: Unable to track "${eventName}" - fbq not available`
+    );
   }
 };
 
-export function MetaPixel() {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+function MetaPixelContent() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Track page view on route change
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       // Add trackFBEvent to window object for global access
       window.trackFBEvent = trackFBEvent;
-      
+
       // Track page view on route change
       if (window.fbq) {
-        window.fbq('track', 'PageView');
+        window.fbq("track", "PageView");
         console.log(`Meta Pixel: Tracked PageView for ${pathname}`);
       } else {
         console.warn("Meta Pixel: fbq not available for tracking PageView");
@@ -47,10 +59,10 @@ export function MetaPixel() {
   // Handle script load event
   const handleScriptLoad = () => {
     console.log("Meta Pixel: Script loaded successfully");
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       if (window.fbq) {
         // Make sure we track the initial page view
-        window.fbq('track', 'PageView');
+        window.fbq("track", "PageView");
         console.log(`Meta Pixel: Manually tracked initial PageView`);
       } else {
         console.error("Meta Pixel: fbq not defined after script load");
@@ -61,9 +73,9 @@ export function MetaPixel() {
   return (
     <>
       {/* Meta Pixel Base Code */}
-      <Script 
+      <Script
         id="facebook-pixel"
-        strategy="beforeInteractive" 
+        strategy="beforeInteractive"
         onLoad={handleScriptLoad}
         dangerouslySetInnerHTML={{
           __html: `
@@ -78,10 +90,10 @@ export function MetaPixel() {
             fbq('init', '${FB_PIXEL_ID}');
             fbq('track', 'PageView');
             console.log("Meta Pixel: Base code initialized");
-          `
+          `,
         }}
       />
-      
+
       {/* Inline script as a fallback */}
       <Script id="facebook-pixel-fallback">
         {`
@@ -110,7 +122,7 @@ export function MetaPixel() {
           }
         `}
       </Script>
-      
+
       {/* Noscript fallback */}
       <noscript>
         <img
@@ -122,7 +134,15 @@ export function MetaPixel() {
         />
       </noscript>
     </>
-  )
+  );
+}
+
+export function MetaPixel() {
+  return (
+    <Suspense fallback={null}>
+      <MetaPixelContent />
+    </Suspense>
+  );
 }
 
 // Add TypeScript support for fbq and our tracking function

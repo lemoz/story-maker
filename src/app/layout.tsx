@@ -20,15 +20,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EpicStory Creator",
-  description: "Generate personalized AI children's stories",
+  title: "Story Maker",
+  description: "Create personalized stories for your children",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <head>
@@ -49,9 +49,9 @@ export default function RootLayout({
         </Script>
         {/* Noscript fallback */}
         <noscript>
-          <img 
-            height="1" 
-            width="1" 
+          <img
+            height="1"
+            width="1"
             style={{ display: "none" }}
             src="https://www.facebook.com/tr?id=590024414092578&ev=PageView&noscript=1"
             alt=""
