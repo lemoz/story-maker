@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, BookOpen, Plus } from "lucide-react";
 import useSWR from "swr";
+import { Suspense } from "react";
 
 interface Story {
   id: string;
@@ -29,7 +30,7 @@ const fetcher = async (url: string) => {
   }
 };
 
-export default function ListStoriesPage() {
+function ListStoriesContent() {
   const router = useRouter();
   const { data: session } = useSession();
   const {
@@ -138,5 +139,29 @@ export default function ListStoriesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ListStoriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto py-8 px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-48 w-full" />
+                <CardContent className="p-4">
+                  <Skeleton className="h-6 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <ListStoriesContent />
+    </Suspense>
   );
 }
