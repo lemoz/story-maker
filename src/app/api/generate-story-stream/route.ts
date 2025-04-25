@@ -7,6 +7,10 @@ import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { Character } from "@/components/story-form/Story-characters/characters-section";
 
+// Add at the top of the file, after imports
+const MAX_RETRIES = 3;
+const TIMEOUT_MS = 30000; // 30 seconds timeout
+
 // Character schema
 const characterSchema = z.object({
   id: z.string(),
@@ -148,6 +152,17 @@ async function uploadImageToBlobStorage(
     );
     return null;
   }
+}
+
+// Helper function to handle timeouts
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Operation timed out")), timeoutMs);
+  });
+  return Promise.race([promise, timeout]);
 }
 
 export async function POST(request: NextRequest) {
@@ -1003,7 +1018,7 @@ async function fetchCharacterPhoto(
   }
 }
 
-// Modified generateIllustrations function to use DALL-E 3
+// Modified generateIllustrations function
 async function generateIllustrations(
   controller: ReadableStreamDefaultController,
   openai: OpenAI,
@@ -1011,81 +1026,82 @@ async function generateIllustrations(
   storyInput: StoryInput,
   storyId: string
 ): Promise<(string | null)[]> {
-  // Initialize array with nulls for all pages
   const imageResults: (string | null)[] = Array(storyPages.length).fill(null);
-
-  // Generate illustrations for all pages
   const indicesToIllustrate = Array.from(
     { length: storyPages.length },
     (_, i) => i
   );
 
   for (const index of indicesToIllustrate) {
-    try {
-      const pageText = storyPages[index];
-      const { characters, storyStyle } = storyInput;
+    let retries = 0;
+    let success = false;
 
-      // Send event for illustration progress
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `Generating illustration ${index + 1} of ${
-          storyPages.length
-        }...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail:
-            index === 0
-              ? "Creating title page illustration"
-              : `Creating illustration for page ${index}`,
-        },
-      });
+    while (retries < MAX_RETRIES && !success) {
+      try {
+        const pageText = storyPages[index];
+        const { characters, storyStyle } = storyInput;
 
-      // Find the main character, or use the first character if none is marked as main
-      const mainCharacter =
-        characters.find((char) => char.isMain) || characters[0];
-      const mainCharacterName = mainCharacter.name || "the main character";
-
-      // Get all character names for the illustration
-      const otherCharacterNames = characters
-        .filter((c) => !c.isMain && c.name.trim() !== "")
-        .map((c) => c.name);
-
-      // Create richer character descriptions with gender-specific language
-      const mainCharacterGenderDescription = (() => {
-        if (mainCharacter.gender === "female") {
-          return `a girl named ${mainCharacterName}`;
-        } else if (mainCharacter.gender === "male") {
-          return `a boy named ${mainCharacterName}`;
-        } else {
-          return `a child named ${mainCharacterName}`;
-        }
-      })();
-
-      // Build other characters details with gender
-      const otherCharactersDetails = characters
-        .filter((c) => !c.isMain && c.name.trim() !== "")
-        .map((c) => {
-          if (c.gender === "female") {
-            return `a girl named ${c.name}`;
-          } else if (c.gender === "male") {
-            return `a boy named ${c.name}`;
-          } else {
-            return c.name;
-          }
+        // Send event for illustration progress
+        safeSendEvent(controller, "progress", {
+          step: "illustrating",
+          status: "in_progress",
+          message: `Generating illustration ${index + 1} of ${
+            storyPages.length
+          }...`,
+          illustrationProgress: {
+            current: index + 1,
+            total: storyPages.length,
+            detail:
+              index === 0
+                ? "Creating title page illustration"
+                : `Creating illustration for page ${index}`,
+          },
         });
 
-      // Create a comprehensive character description to guide the illustration
-      const characterDescription =
-        otherCharactersDetails.length > 0
-          ? `The main character is ${mainCharacterGenderDescription}. Other characters that may appear: ${otherCharactersDetails.join(
-              ", "
-            )}.`
-          : `The main character is ${mainCharacterGenderDescription}.`;
+        // Find the main character, or use the first character if none is marked as main
+        const mainCharacter =
+          characters.find((char) => char.isMain) || characters[0];
+        const mainCharacterName = mainCharacter.name || "the main character";
 
-      // Create enhanced prompt for DALL-E 3 image generation
-      const promptText = `
+        // Get all character names for the illustration
+        const otherCharacterNames = characters
+          .filter((c) => !c.isMain && c.name.trim() !== "")
+          .map((c) => c.name);
+
+        // Create richer character descriptions with gender-specific language
+        const mainCharacterGenderDescription = (() => {
+          if (mainCharacter.gender === "female") {
+            return `a girl named ${mainCharacterName}`;
+          } else if (mainCharacter.gender === "male") {
+            return `a boy named ${mainCharacterName}`;
+          } else {
+            return `a child named ${mainCharacterName}`;
+          }
+        })();
+
+        // Build other characters details with gender
+        const otherCharactersDetails = characters
+          .filter((c) => !c.isMain && c.name.trim() !== "")
+          .map((c) => {
+            if (c.gender === "female") {
+              return `a girl named ${c.name}`;
+            } else if (c.gender === "male") {
+              return `a boy named ${c.name}`;
+            } else {
+              return c.name;
+            }
+          });
+
+        // Create a comprehensive character description to guide the illustration
+        const characterDescription =
+          otherCharactersDetails.length > 0
+            ? `The main character is ${mainCharacterGenderDescription}. Other characters that may appear: ${otherCharactersDetails.join(
+                ", "
+              )}.`
+            : `The main character is ${mainCharacterGenderDescription}.`;
+
+        // Create enhanced prompt for DALL-E 3 image generation
+        const promptText = `
 ⚠️ CRITICAL INSTRUCTION - STRICT NO TEXT POLICY ⚠️
 This is a children's book illustration. TEXT IS COMPLETELY FORBIDDEN IN ANY FORM.
 
@@ -1156,59 +1172,101 @@ STYLE GUIDELINES:
 FINAL VERIFICATION:
 This image MUST be completely free of any text, letters, numbers, writing, or readable elements. The illustration should tell the story through pure visuals only. If there is ANY doubt about an element containing text, remove it or replace it with a text-free alternative.`;
 
-      console.log(`Generating image for page ${index + 1} using DALL-E 3...`);
-
-      // Call DALL-E 3 API
-      const response = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: promptText,
-        n: 1,
-        size: "1024x1024",
-        quality: "standard",
-        style: "vivid",
-        response_format: "b64_json",
-      });
-
-      console.log(`Got response from DALL-E 3 for page ${index + 1}`);
-
-      // Extract base64 image data
-      const base64ImageData = response.data[0]?.b64_json;
-
-      if (base64ImageData) {
-        // Send a preview event with the base64 data so frontend can show it immediately
-        safeSendEvent(controller, "image_preview", {
-          pageIndex: index,
-          previewUrl: `data:image/png;base64,${base64ImageData}`,
-        });
-
-        // Upload the image to blob storage
-        const imageUrl = await uploadImageToBlobStorage(
-          `data:image/png;base64,${base64ImageData}`,
-          storyId,
-          index
+        console.log(
+          `Generating image for page ${index + 1} using DALL-E 3 (attempt ${
+            retries + 1
+          })...`
         );
 
-        if (imageUrl) {
-          imageResults[index] = imageUrl;
-          console.log(
-            `Successfully uploaded image and stored URL for page ${index + 1}`
+        // Call DALL-E 3 API with timeout
+        const response = await withTimeout(
+          openai.images.generate({
+            model: "dall-e-3",
+            prompt: promptText,
+            n: 1,
+            size: "1024x1024",
+            quality: "standard",
+            style: "vivid",
+            response_format: "b64_json",
+          }),
+          TIMEOUT_MS
+        );
+
+        console.log(`Got response from DALL-E 3 for page ${index + 1}`);
+
+        // Extract base64 image data
+        const base64ImageData = response.data[0]?.b64_json;
+
+        if (base64ImageData) {
+          // Send a preview event with the base64 data
+          safeSendEvent(controller, "image_preview", {
+            pageIndex: index,
+            previewUrl: `data:image/png;base64,${base64ImageData}`,
+          });
+
+          // Upload the image to blob storage
+          const imageUrl = await uploadImageToBlobStorage(
+            `data:image/png;base64,${base64ImageData}`,
+            storyId,
+            index
           );
+
+          if (imageUrl) {
+            imageResults[index] = imageUrl;
+            console.log(
+              `Successfully uploaded image and stored URL for page ${index + 1}`
+            );
+            success = true;
+          } else {
+            console.error(
+              `Failed to upload image for page ${index + 1}. URL will be null.`
+            );
+            retries++;
+          }
         } else {
-          console.error(
-            `Failed to upload image for page ${index + 1}. URL will be null.`
+          console.warn(
+            `No image data received from DALL-E 3 for page ${index + 1}`
           );
+          retries++;
         }
-      } else {
-        console.warn(
-          `No image data received from DALL-E 3 for page ${index + 1}`
+      } catch (error) {
+        console.error(
+          `Error generating illustration for page ${index} (attempt ${
+            retries + 1
+          }):`,
+          error instanceof Error ? error.message : "Unknown error"
         );
+
+        if (error instanceof Error && error.message === "Operation timed out") {
+          console.log(`Timeout occurred for page ${index + 1}, retrying...`);
+        }
+
+        retries++;
+
+        if (retries >= MAX_RETRIES) {
+          console.error(
+            `Failed to generate illustration for page ${
+              index + 1
+            } after ${MAX_RETRIES} attempts`
+          );
+          // Send error event but continue with other illustrations
+          safeSendEvent(controller, "progress", {
+            step: "illustrating",
+            status: "in_progress",
+            message: `Failed to generate illustration ${
+              index + 1
+            }, continuing with others...`,
+            illustrationProgress: {
+              current: index + 1,
+              total: storyPages.length,
+              detail: "Generation failed, continuing...",
+            },
+          });
+        } else {
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+        }
       }
-    } catch (error) {
-      console.error(
-        `Error generating illustration for page ${index}:`,
-        error instanceof Error ? error.message : "Unknown error"
-      );
-      // Continue with other illustrations rather than failing completely
     }
   }
 
