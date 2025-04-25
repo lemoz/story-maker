@@ -371,7 +371,7 @@ export async function POST(request: NextRequest) {
             // Generate each illustration and send events for progress
             const imageUrls = await generateIllustrations(
               controller,
-              generativeModel,
+              openai,
               storyPagesText,
               storyInput,
               storyId
@@ -1003,10 +1003,10 @@ async function fetchCharacterPhoto(
   }
 }
 
-// Modified generateIllustrations function to send progress events
+// Modified generateIllustrations function to use DALL-E 3
 async function generateIllustrations(
   controller: ReadableStreamDefaultController,
-  generativeModel: any,
+  openai: OpenAI,
   storyPages: string[],
   storyInput: StoryInput,
   storyId: string
@@ -1039,18 +1039,6 @@ async function generateIllustrations(
             index === 0
               ? "Creating title page illustration"
               : `Creating illustration for page ${index}`,
-        },
-      });
-
-      // Send substep events to show more granular progress
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `Analyzing scene content for page ${index + 1}...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail: "Analyzing scene...",
         },
       });
 
@@ -1096,9 +1084,10 @@ async function generateIllustrations(
             )}.`
           : `The main character is ${mainCharacterGenderDescription}.`;
 
-      // Create enhanced prompt for image generation using a structured approach
+      // Create enhanced prompt for DALL-E 3 image generation
       const promptText = `
-⚠️ IMPORTANT - ILLUSTRATION ONLY: DO NOT INCLUDE ANY TEXT IN THE IMAGE ⚠️
+⚠️ CRITICAL INSTRUCTION - STRICT NO TEXT POLICY ⚠️
+This is a children's book illustration. TEXT IS COMPLETELY FORBIDDEN IN ANY FORM.
 
 CREATE A CHILDREN'S BOOK ILLUSTRATION showing this scene:
 ${pageText.replace(/\b[A-Z]{2,}\b/g, (word) => word.toLowerCase())} 
@@ -1132,246 +1121,106 @@ ${
     : ""
 }
 
-ARTISTIC DIRECTION:
-- Create a clean, well-composed illustration with attention to lighting and depth
-- Use vibrant, harmonious colors appropriate for children's illustrations
-- Maintain a consistent artistic style across the story pages
-- Focus on expressive character faces and clear storytelling
+MANDATORY RULES - NO EXCEPTIONS:
+1. ZERO TEXT POLICY: The image must be completely free of any text, letters, numbers, or symbols
+2. NO TEXT ON OBJECTS: Books, papers, signs, clothing, or any other objects must be completely blank
+3. NO TEXT IN BACKGROUND: No text in any part of the background or environment
+4. NO TEXT IN FOREGROUND: No text in any part of the foreground or main elements
+5. NO TEXT IN DECORATIONS: No text in any decorative elements or patterns
+6. NO TEXT IN ANY FORM: No text in any language, style, or format
+7. NO TEXT IN ANY SHAPE: No text disguised as shapes, patterns, or other elements
+8. NO TEXT IN ANY CONTEXT: No text in any context or situation
+
+OBJECT HANDLING - TEXT-FREE REQUIREMENTS:
+- Books and papers: Show only blank pages or abstract patterns
+- Signs and displays: Use only blank surfaces or abstract shapes
+- Clothing and accessories: Remove all text and use solid colors or patterns
+- Buildings and structures: Remove all text from walls, windows, or surfaces
+- Natural elements: Ensure no text is present in any natural elements
+- Artificial elements: Ensure no text is present in any man-made elements
+
+SAFETY MEASURES:
+- Double-check every element for potential text
+- Remove any element that might contain text
+- Replace text-containing elements with text-free alternatives
+- Verify the entire image is text-free before finalizing
+
+STYLE GUIDELINES:
+- Create a clean, well-composed illustration
+- Use vibrant, harmonious colors
+- Maintain consistent artistic style
+- Focus on expressive character faces
 - Keep backgrounds detailed but not overwhelming
-- Show objects like books, papers, or signs WITHOUT any visible text on them
+- Ensure clear storytelling through visuals only
 
-⚠️ STRICT REQUIREMENTS - READ CAREFULLY: ⚠️
-1. ABSOLUTELY NO TEXT OR LETTERS of any kind in the image
-2. NO WORDS, WRITING, LETTERS, NUMBERS, OR TYPOGRAPHY anywhere in the illustration
-3. REMOVE ALL TEXT from any objects like books, signs, clothing, etc.
-4. DO NOT render any words from the story text as visual elements
-5. If you need to show reading materials, show BLANK pages or abstract patterns only
-6. ANY signs or displays should be BLANK or show simple abstract symbols only
+FINAL VERIFICATION:
+This image MUST be completely free of any text, letters, numbers, writing, or readable elements. The illustration should tell the story through pure visuals only. If there is ANY doubt about an element containing text, remove it or replace it with a text-free alternative.`;
 
-CREATE AN IMAGE ONLY - This is critical for the book production process.
+      console.log(`Generating image for page ${index + 1} using DALL-E 3...`);
 
-FINAL INSTRUCTION: This image MUST NOT contain any text, letters, numbers, writing, or readable elements whatsoever.
-`.trim();
-
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `Creating composition for page ${index + 1}...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail: "Creating composition...",
-        },
+      // Call DALL-E 3 API
+      const response = await openai.images.generate({
+        model: "dall-e-3",
+        prompt: promptText,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+        style: "vivid",
+        response_format: "b64_json",
       });
 
-      console.log(`Generating image for page ${index + 1} using Gemini...`);
+      console.log(`Got response from DALL-E 3 for page ${index + 1}`);
 
-      // Prepare the content parts for Gemini
-      const contentParts: any[] = [{ text: promptText }];
+      // Extract base64 image data
+      const base64ImageData = response.data[0]?.b64_json;
 
-      // Check if main character has an uploaded photo
-      let characterPhotoData = null;
-      if (mainCharacter.uploadedPhotoUrl) {
-        safeSendEvent(controller, "progress", {
-          step: "illustrating",
-          status: "in_progress",
-          message: `Processing character photo for page ${index + 1}...`,
-          illustrationProgress: {
-            current: index + 1,
-            total: storyPages.length,
-            detail: "Processing character photo...",
-          },
-        });
-
-        characterPhotoData = await fetchCharacterPhoto(
-          mainCharacter.uploadedPhotoUrl
-        );
-
-        if (characterPhotoData) {
-          console.log(
-            `Adding character photo to Gemini request for page ${index + 1}`
-          );
-
-          // Add additional text to prompt about using the character photo
-          contentParts[0].text += `\nUse the provided image as a reference for the main character's appearance.`;
-
-          // Add the image part
-          contentParts.push({
-            inlineData: {
-              data: characterPhotoData.data,
-              mimeType: characterPhotoData.mimeType,
-            },
-          });
-        }
-      }
-
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `AI generating image for page ${index + 1}...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail: "AI drawing illustration...",
-        },
-      });
-
-      // Call generateContent with the @google/generative-ai structure
-      // Use type assertion to work around TypeScript errors while keeping functionality
-      const result = await generativeModel.generateContent({
-        contents: [{ role: "user", parts: contentParts }],
-        generationConfig: {
-          responseModalities: ["Text", "Image"],
-        },
-      } as any);
-
-      const response = await result.response;
-
-      console.log(`Got response from Gemini for page ${index + 1}`);
-
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `Processing generated image for page ${index + 1}...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail: "Processing generated image...",
-        },
-      });
-
-      // Extract image data
-      const imageCandidate = response.candidates?.[0];
-      let base64ImageData: string | null = null;
-
-      if (imageCandidate?.content?.parts) {
-        const imagePart = imageCandidate.content.parts.find(
-          (part: any) => part.inlineData?.data
-        );
-        if (imagePart?.inlineData?.data) {
-          const mimeType = imagePart.inlineData.mimeType || "image/png";
-          base64ImageData = `data:${mimeType};base64,${imagePart.inlineData.data}`;
-          console.log(
-            `Successfully extracted base64 image data for page ${index + 1}`
-          );
-
-          // Send a preview event with the base64 data so frontend can show it immediately
-          safeSendEvent(controller, "image_preview", {
-            pageIndex: index,
-            previewUrl: base64ImageData,
-          });
-        } else {
-          console.warn(
-            `No image part found in Gemini response for page ${index + 1}`
-          );
-        }
-      } else {
-        console.warn(
-          `No valid candidates or parts found in Gemini response for page ${
-            index + 1
-          }`
-        );
-      }
-
-      // Upload the image if we got data
       if (base64ImageData) {
-        console.log(
-          `Page ${
-            index + 1
-          }: Preparing to upload base64 image to blob storage. Data length: ${
-            base64ImageData.length
-          } characters`
-        );
-        safeSendEvent(controller, "progress", {
-          step: "illustrating",
-          status: "in_progress",
-          message: `Uploading illustration for page ${index + 1}...`,
-          illustrationProgress: {
-            current: index + 1,
-            total: storyPages.length,
-            detail: "Uploading and saving illustration...",
-          },
+        // Send a preview event with the base64 data so frontend can show it immediately
+        safeSendEvent(controller, "image_preview", {
+          pageIndex: index,
+          previewUrl: `data:image/png;base64,${base64ImageData}`,
         });
 
-        console.log(
-          `Page ${index + 1}: Calling uploadImageToBlobStorage function...`
-        );
+        // Upload the image to blob storage
         const imageUrl = await uploadImageToBlobStorage(
-          base64ImageData,
+          `data:image/png;base64,${base64ImageData}`,
           storyId,
           index
         );
 
         if (imageUrl) {
-          imageResults[index] = imageUrl; // Store the URL
+          imageResults[index] = imageUrl;
           console.log(
-            `Page ${
-              index + 1
-            }: Successfully uploaded image and stored URL: ${imageUrl}`
+            `Successfully uploaded image and stored URL for page ${index + 1}`
           );
-
-          // Send completion event for this illustration
-          console.log(`Page ${index + 1}: Sending progress event to client.`);
-          safeSendEvent(controller, "progress", {
-            step: "illustrating",
-            status: "in_progress",
-            message: `Completed illustration ${index + 1} of ${
-              storyPages.length
-            }`,
-            illustrationProgress: {
-              current: index + 1,
-              total: storyPages.length,
-              detail: "Illustration complete!",
-            },
-          });
         } else {
           console.error(
-            `ERROR: Failed to upload image for page ${
-              index + 1
-            }. URL will be null.`
+            `Failed to upload image for page ${index + 1}. URL will be null.`
           );
-          console.log(
-            `Page ${index + 1}: Sending error progress event to client.`
-          );
-          safeSendEvent(controller, "progress", {
-            step: "illustrating",
-            status: "in_progress",
-            message: `Warning: Failed to upload image for page ${index + 1}`,
-            illustrationProgress: {
-              current: index + 1,
-              total: storyPages.length,
-              detail: "Upload failed, continuing...",
-            },
-          });
         }
+      } else {
+        console.warn(
+          `No image data received from DALL-E 3 for page ${index + 1}`
+        );
       }
     } catch (error) {
-      console.error(`Error generating illustration for page ${index}:`, error);
+      console.error(
+        `Error generating illustration for page ${index}:`,
+        error instanceof Error ? error.message : "Unknown error"
+      );
       // Continue with other illustrations rather than failing completely
-      safeSendEvent(controller, "progress", {
-        step: "illustrating",
-        status: "in_progress",
-        message: `Error generating illustration ${index + 1}, continuing...`,
-        illustrationProgress: {
-          current: index + 1,
-          total: storyPages.length,
-          detail: "Error with this illustration, continuing...",
-        },
-      });
     }
   }
 
-  console.log("Illustration loop completed. All images processed.");
-
-  // Send final completion event for illustration phase
-  console.log("Sending final illustration completion event to client.");
+  // Send completion event
   safeSendEvent(controller, "progress", {
     step: "illustrating",
     status: "complete",
-    message: "All illustrations generated!",
+    message: "All illustrations generated successfully!",
     illustrationProgress: {
       current: storyPages.length,
       total: storyPages.length,
+      detail: "All illustrations complete!",
     },
   });
 
